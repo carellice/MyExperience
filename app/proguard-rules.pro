@@ -1,0 +1,3 @@
+-keep class org.osmdroid.** { *; }
+-dontwarn org.osmdroid.**
+-keep class com.myexperience.app.data.** { *; }
