@@ -22,6 +22,8 @@ import androidx.compose.material.icons.rounded.PhotoAlbum
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.WorkspacePremium
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.PlaceWithMedia
+import com.myexperience.app.data.UnescoSites
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.journal.themeById
 import com.myexperience.app.ui.theme.BrandBrush
@@ -58,8 +61,10 @@ fun ProfileScreen(
     vm: MainViewModel,
     onOpenPlace: (Long) -> Unit,
     onAdd: () -> Unit,
+    onOpenUnesco: () -> Unit,
 ) {
     val places by vm.places.collectAsStateWithLifecycle()
+    val badges by vm.badges.collectAsStateWithLifecycle()
     val profile by vm.profile.collectAsStateWithLifecycle()
     val all = places.orEmpty()
     var editing by remember { mutableStateOf(false) }
@@ -161,6 +166,10 @@ fun ProfileScreen(
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
+            BadgeCollection(badges, onOpenUnesco)
+        }
+
+        item(span = { GridItemSpan(maxLineSpan) }) {
             Column {
                 SectionTitle("I miei album", Modifier.padding(top = 4.dp).offset(x = (-20).dp))
                 if (all.isNotEmpty()) {
@@ -170,7 +179,7 @@ fun ProfileScreen(
                             item { SelectChip("Preferiti", filter == "♥", Icons.Rounded.Favorite) { filter = "♥" } }
                         }
                         items(countries, key = { it.key }) { (c, n) ->
-                            SelectChip("$c · $n", filter == c) { filter = if (filter == c) null else c }
+                            SelectChip("${flagPrefix(c)}$c · $n", filter == c) { filter = if (filter == c) null else c }
                         }
                     }
                 }
@@ -256,6 +265,59 @@ fun ProfileScreen(
     }
 }
 
+/** Collezione dei bollini UNESCO: avanzamento e ultimi raccolti. */
+@Composable
+private fun BadgeCollection(badges: Map<String, Long>, onOpen: () -> Unit) {
+    val total = UnescoSites.size
+    val collected = UnescoSites.filter { it.id in badges }.sortedByDescending { badges[it.id] }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface)
+            .bounceClick(onClick = onOpen).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.WorkspacePremium, null, tint = Color(0xFFD9A63E))
+            Spacer(Modifier.width(8.dp))
+            Text("Bollini UNESCO", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("${collected.size}/$total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+            Box(
+                Modifier.fillMaxWidth(collected.size.toFloat() / total).fillMaxHeight()
+                    .clip(RoundedCornerShape(50)).background(BrandBrush),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        if (collected.isEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UnescoSites.take(3).forEach {
+                    UnescoBadge(it, false, 52.dp)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Visita un patrimonio dell'umanità per raccogliere il primo bollino",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(collected, key = { it.id }) { site ->
+                    Column(Modifier.width(84.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        UnescoBadge(site, true, 76.dp)
+                        Text(
+                            site.name, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val place = p.place
@@ -274,8 +336,8 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                 ),
             )
             Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                val codes = p.countries.map { countryCode(it) }.filter { it.isNotEmpty() }.take(4)
-                if (codes.isNotEmpty()) GlassChip(codes.joinToString(" · "))
+                val flags = p.countries.ifEmpty { listOf(place.country) }.take(4).joinToString("") { countryFlag(it) }
+                if (flags.isNotEmpty()) GlassChip(flags)
                 if (place.favorite) {
                     Box(
                         Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)),

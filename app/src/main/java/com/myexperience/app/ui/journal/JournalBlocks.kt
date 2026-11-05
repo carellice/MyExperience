@@ -54,6 +54,7 @@ import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.Place
 import com.myexperience.app.data.PlaceStop
+import com.myexperience.app.ui.components.flagPrefix
 import com.myexperience.app.ui.components.formatRange
 import com.myexperience.app.ui.components.stickerIcon
 import java.io.File
@@ -145,7 +146,7 @@ val BlockTypes = listOf(
     BlockType("LIST", Icons.Rounded.FormatListBulleted, "Elenco", "Momenti, tappe, cibi…"),
     BlockType("PHOTO", Icons.Rounded.Image, "Foto / video", "Polaroid o foto grande"),
     BlockType("GALLERY", Icons.Rounded.Collections, "Collage", "Più foto insieme"),
-    BlockType("STICKER", Icons.Rounded.Interests, "Icone", "Decorazioni a tema viaggio"),
+    BlockType("STICKER", Icons.Rounded.Interests, "Icone ed emoji", "Decorazioni a tema viaggio"),
     BlockType("STAMP", Icons.Rounded.Approval, "Timbro", "Luogo e data"),
     BlockType("DIVIDER", Icons.Rounded.HorizontalRule, "Separatore", "Dividi le sezioni"),
     BlockType("ROUTE", Icons.Rounded.Route, "Percorso", "Le tappe del viaggio"),
@@ -317,7 +318,8 @@ fun JournalBlockView(
             "STICKER" -> {
                 val inf = rememberInfiniteTransition(label = "sticker")
                 val y by inf.animateFloat(-4f, 4f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
-                val icons = block.text.split(' ').mapNotNull { stickerIcon(it.trim()) }.ifEmpty { listOf(Icons.Rounded.AutoAwesome) }
+                // ogni voce è una chiave di icona oppure un'emoji
+                val tokens = block.text.split(' ').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("sparkle") }
                 Row(
                     Modifier.fillMaxWidth().graphicsLayer { translationY = y },
                     horizontalArrangement = when (block.align) {
@@ -326,19 +328,26 @@ fun JournalBlockView(
                         else -> Arrangement.spacedBy(14.dp)
                     },
                 ) {
-                    icons.forEachIndexed { i, ic ->
-                        val c = if (block.color != 0) ink else AccentCycle[i % AccentCycle.size]
-                        Box(
-                            Modifier.size((fs * 1.5f).dp).clip(CircleShape).background(c.copy(alpha = 0.14f)),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(ic, null, tint = c, modifier = Modifier.size(fs.dp)) }
+                    tokens.forEachIndexed { i, t ->
+                        val ic = stickerIcon(t)
+                        if (ic != null) {
+                            val c = if (block.color != 0) ink else AccentCycle[i % AccentCycle.size]
+                            Box(
+                                Modifier.size((fs * 1.5f).dp).clip(CircleShape).background(c.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(ic, null, tint = c, modifier = Modifier.size(fs.dp)) }
+                        } else {
+                            Box(Modifier.size((fs * 1.5f).dp), contentAlignment = Alignment.Center) {
+                                Text(t, fontSize = (fs * 1.1f).sp)
+                            }
+                        }
                     }
                 }
             }
 
             "STAMP" -> {
                 val label = block.text.ifBlank {
-                    place.locationName.uppercase() +
+                    flagPrefix(place.country) + place.locationName.uppercase() +
                         (if (place.country.isNotBlank()) " · ${place.country.uppercase()}" else "")
                 }
                 Box(Modifier.fillMaxWidth(), contentAlignment = when (block.align) {

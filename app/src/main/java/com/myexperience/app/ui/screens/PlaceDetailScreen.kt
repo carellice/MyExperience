@@ -145,13 +145,13 @@ fun PlaceDetailScreen(
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 22.dp, vertical = 18.dp).appear()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (route.size > 1) {
-                                val codes = d.countries.map { countryCode(it) }.filter { it.isNotEmpty() }
+                                val flags = d.countries.joinToString("") { countryFlag(it) }
                                 GlassChip(
-                                    "${route.size} tappe" + if (codes.isNotEmpty()) " · ${codes.joinToString(" ")}" else "",
+                                    "${route.size} tappe" + if (flags.isNotEmpty()) " · $flags" else "",
                                     icon = Icons.Rounded.Route,
                                 )
                             } else {
-                                GlassChip(p.locationName, icon = Icons.Rounded.Place)
+                                GlassChip(flagPrefix(p.country) + p.locationName, icon = Icons.Rounded.Place)
                             }
                             GlassChip("", icon = moodFor(p.mood).icon)
                         }

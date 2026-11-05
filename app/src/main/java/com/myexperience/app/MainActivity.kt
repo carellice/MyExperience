@@ -156,7 +156,11 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                     vm.setPicked(loc)
                     nav.navigate("place_edit/0")
                 },
+                onOpenUnesco = { nav.navigate("unesco") },
             )
+        }
+        composable("unesco") {
+            UnescoScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable(
             "trips",
@@ -178,6 +182,7 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                 vm = vm,
                 onOpenPlace = { nav.navigate("place/$it") },
                 onAdd = { nav.navigate("place_edit/0") },
+                onOpenUnesco = { nav.navigate("unesco") },
             )
         }
         composable("place/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->

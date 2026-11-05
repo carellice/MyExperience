@@ -15,6 +15,7 @@ import com.myexperience.app.data.Profile
 import com.myexperience.app.data.TripDestination
 import com.myexperience.app.data.TripTask
 import com.myexperience.app.data.TripWithDetails
+import com.myexperience.app.ui.globe.GlobeSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,10 +43,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            repo.addMissingRoutes()
-            repo.convertEmojiStickers()
-        }
+        viewModelScope.launch { repo.addMissingRoutes() }
     }
 
     fun place(id: Long): Flow<PlaceWithMedia?> = repo.place(id)
@@ -91,6 +89,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- globo ----
+    private val _globeSettings = MutableStateFlow(GlobeSettings.load(app))
+    val globeSettings: StateFlow<GlobeSettings> = _globeSettings.asStateFlow()
+
+    fun updateGlobeSettings(s: GlobeSettings) {
+        _globeSettings.value = s
+        GlobeSettings.save(getApplication(), s)
+    }
+
+    // ---- bollini UNESCO ----
+    private val _badges = MutableStateFlow(repo.loadBadges())
+    val badges: StateFlow<Map<String, Long>> = _badges.asStateFlow()
+
+    /** Siti per cui l'utente ha scelto "più tardi": non si ripropongono fino al riavvio. */
+    val postponedBadges = mutableSetOf<String>()
+
+    fun collectBadge(id: String) {
+        if (id in _badges.value) return
+        val now = System.currentTimeMillis()
+        repo.saveBadge(id, now)
+        _badges.value = _badges.value + (id to now)
+    }
+
     /** Orientamento del globo conservato tra una visita e l'altra della Home. */
     val globeCamera = floatArrayOf(12.5f, 30f, 0f) // yaw(lon), pitch(lat), distanza (0 = default)
 

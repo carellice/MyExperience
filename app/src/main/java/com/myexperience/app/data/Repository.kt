@@ -5,9 +5,7 @@ import android.location.Address
 import android.location.Geocoder
 import android.net.Uri
 import android.webkit.MimeTypeMap
-import com.myexperience.app.ui.components.LegacyStickerKeys
 import com.myexperience.app.ui.components.moodSticker
-import com.myexperience.app.ui.components.stickerIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -96,25 +94,6 @@ class Repository(private val context: Context, db: AppDatabase) {
             else addRouteBlock(placeId)
         }
         prefs.edit().putBoolean("routes_v13", true).apply()
-    }
-
-    /** Una tantum (v1.4): gli sticker emoji del diario diventano icone, il testo d'esempio perde l'emoji. */
-    suspend fun convertEmojiStickers() {
-        if (prefs.getBoolean("icons_v14", false)) return
-        val changed = placeDao.allBlocks().mapNotNull { b ->
-            when (b.type) {
-                "STICKER" -> {
-                    val tokens = b.text.split(' ').map { it.trim() }.filter { it.isNotEmpty() }
-                    if (tokens.all { stickerIcon(it) != null }) null
-                    else b.copy(text = tokens.mapNotNull { t -> if (stickerIcon(t) != null) t else LegacyStickerKeys[t] }
-                        .ifEmpty { listOf("sparkle") }.joinToString(" "))
-                }
-                "TEXT" -> if ("Tocca ✏️ Personalizza" in b.text) b.copy(text = b.text.replace("✏️ ", "")) else null
-                else -> null
-            }
-        }
-        if (changed.isNotEmpty()) placeDao.updateBlocks(changed)
-        prefs.edit().putBoolean("icons_v14", true).apply()
     }
 
     suspend fun deletePlace(place: Place) = withContext(Dispatchers.IO) {
@@ -348,6 +327,15 @@ class Repository(private val context: Context, db: AppDatabase) {
     suspend fun addTask(tripId: Long, text: String) = tripDao.insertTask(TripTask(tripId = tripId, text = text))
     suspend fun updateTask(t: TripTask) = tripDao.updateTask(t)
     suspend fun deleteTask(t: TripTask) = tripDao.deleteTask(t)
+
+    // ---------- Bollini UNESCO ----------
+    private val badgePrefs = context.getSharedPreferences("badges", Context.MODE_PRIVATE)
+
+    /** Bollini raccolti: id del sito -> momento della raccolta. */
+    fun loadBadges(): Map<String, Long> =
+        badgePrefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap()
+
+    fun saveBadge(id: String, at: Long) = badgePrefs.edit().putLong(id, at).apply()
 
     // ---------- Profilo ----------
     fun loadProfile() = Profile(

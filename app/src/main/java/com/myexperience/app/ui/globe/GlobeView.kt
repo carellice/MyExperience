@@ -35,7 +35,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 
-/** Punto evidenziato sul globo. kind: 0 = visitato, 1 = in programma, 2 = nuovo (temporaneo). */
+/** Punto evidenziato sul globo. kind: 0 = visitato, 1 = in programma, 2 = nuovo (temporaneo), 3 = patrimonio UNESCO. */
 data class GlobeMarker(
     val id: Long,
     val lat: Double,
@@ -76,6 +76,10 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
     /** Rotazione automatica quando inattivo (disattivata mentre una scheda è aperta). */
     fun setAutoRotate(enabled: Boolean) {
         renderer.autoRotate = enabled
+    }
+
+    fun setSettings(s: GlobeSettings) {
+        renderer.settings = s
     }
 
     // ------------------------------------------------------------------ gesti
@@ -169,6 +173,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
     @Volatile private var touching = false
     @Volatile private var lastInteraction = SystemClock.uptimeMillis()
     @Volatile var autoRotate = true
+    @Volatile var settings = GlobeSettings()
 
     // volo animato
     @Volatile private var flying = false
@@ -412,10 +417,11 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         val time = (now - startTime) / 1000f
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
 
-        drawStars(time)
-        drawEarth(time)
-        drawAtmosphere()
-        drawMarkers(time)
+        val s = settings
+        if (s.stars) drawStars(time)
+        drawEarth(time, s)
+        if (s.atmosphere) drawAtmosphere(s)
+        drawMarkers(time, s)
 
         if (!firstFrameDone) {
             firstFrameDone = true
@@ -443,7 +449,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
             velPitch *= decay
             if (abs(velYaw) < 0.5f) velYaw = 0f
             if (abs(velPitch) < 0.5f) velPitch = 0f
-        } else if (autoRotate && now - lastInteraction > 6000) {
+        } else if (autoRotate && settings.autoRotate && now - lastInteraction > 6000) {
             // rotazione automatica lenta quando il globo è inattivo
             val ramp = ((now - lastInteraction - 6000) / 3000f).coerceIn(0f, 1f)
             yaw -= 2.5f * dt * ramp // verso est, come la vera rotazione terrestre
@@ -494,7 +500,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         return aPos to aUv
     }
 
-    private fun drawEarth(time: Float) {
+    private fun drawEarth(time: Float, s: GlobeSettings) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glDepthMask(true)
         GLES20.glDisable(GLES20.GL_BLEND)
@@ -506,6 +512,12 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         GLES20.glUniform3f(GLES20.glGetUniformLocation(earthProg, "uSun"), sun[0], sun[1], sun[2])
         GLES20.glUniform3f(GLES20.glGetUniformLocation(earthProg, "uCam"), camObj[0], camObj[1], camObj[2])
         GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uCloudShift"), (time * 0.0012f) % 1f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uAlwaysDay"), if (s.alwaysDay) 1f else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uGlint"), if (s.sunGlint) 1f else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uCloudsOn"), if (s.clouds) 1f else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uAtmoOn"), if (s.atmosphere) 1f else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uCityLights"), if (s.cityLights) 1f else 0f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(earthProg, "uBright"), s.brightness)
         bindTex(earthProg, "uDay", texDay, 0)
         bindTex(earthProg, "uNight", texNight, 1)
         bindTex(earthProg, "uClouds", texClouds, 2)
@@ -515,7 +527,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         if (aUv >= 0) GLES20.glDisableVertexAttribArray(aUv)
     }
 
-    private fun drawAtmosphere() {
+    private fun drawAtmosphere(s: GlobeSettings) {
         GLES20.glEnable(GLES20.GL_DEPTH_TEST)
         GLES20.glDepthMask(false)
         GLES20.glEnable(GLES20.GL_BLEND)
@@ -528,6 +540,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         GLES20.glUniformMatrix4fv(GLES20.glGetUniformLocation(atmoProg, "uMV"), 1, false, mv, 0)
         GLES20.glUniform3f(GLES20.glGetUniformLocation(atmoProg, "uSun"), sun[0], sun[1], sun[2])
         GLES20.glUniform1f(GLES20.glGetUniformLocation(atmoProg, "uScale"), 1.13f)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(atmoProg, "uAlwaysDay"), if (s.alwaysDay) 1f else 0f)
         GLES20.glDrawElements(GLES20.GL_TRIANGLES, sphereIndexCount, GLES20.GL_UNSIGNED_SHORT, 0)
         GLES20.glDisableVertexAttribArray(aPos)
         if (aUv >= 0) GLES20.glDisableVertexAttribArray(aUv)
@@ -535,7 +548,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         GLES20.glDepthMask(true)
     }
 
-    private fun drawMarkers(time: Float) {
+    private fun drawMarkers(time: Float, s: GlobeSettings) {
         if (markersDirty) rebuildMarkers()
         val buf = markerBuffer ?: return
         if (markerCount == 0) return
@@ -564,7 +577,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         val density = context.resources.displayMetrics.density
         // pin un po' più grandi quando si è vicini
         val zoomBoost = (defaultDist / dist).coerceIn(1f, 1.6f)
-        GLES20.glUniform1f(GLES20.glGetUniformLocation(markerProg, "uPx"), 30f * density * zoomBoost)
+        GLES20.glUniform1f(GLES20.glGetUniformLocation(markerProg, "uPx"), 30f * density * zoomBoost * s.pinScale)
         GLES20.glDrawArrays(GLES20.GL_POINTS, 0, markerCount)
         GLES20.glDisableVertexAttribArray(aPos)
         GLES20.glDisableVertexAttribArray(aColor)
@@ -581,13 +594,14 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
             markersDirty = false
         }
         // i selezionati vanno disegnati per ultimi (sopra gli altri)
-        val ordered = list.sortedBy { if (it.id == sel && it.kind != 2) 1 else 0 }
+        val ordered = list.sortedBy { if (it.id == sel && it.kind != 2) 2 else if (it.kind == 3) 0 else 1 }
         val data = FloatArray(ordered.size * 8)
         ordered.forEachIndexed { i, m ->
             val p = latLonToXyz(m.lat, m.lon)
             val c = when (m.kind) {
                 1 -> floatArrayOf(0.56f, 0.83f, 0.87f)   // in programma: azzurro cielo
                 2 -> floatArrayOf(1f, 1f, 1f)            // nuovo punto
+                3 -> floatArrayOf(1f, 0.80f, 0.28f)      // patrimonio UNESCO: oro
                 else -> floatArrayOf(0.94f, 0.64f, 0.42f) // visitato: terracotta
             }
             val o = i * 8
@@ -770,12 +784,20 @@ uniform sampler2D uSpec;
 uniform vec3 uSun;
 uniform vec3 uCam;
 uniform float uCloudShift;
+uniform float uAlwaysDay;
+uniform float uGlint;
+uniform float uCloudsOn;
+uniform float uAtmoOn;
+uniform float uCityLights;
+uniform float uBright;
 varying vec3 vPos;
 varying vec2 vUv;
 void main() {
     vec3 n = normalize(vPos);
     vec3 v = normalize(uCam - vPos);
-    float ndl = dot(n, uSun);
+    // "sempre giorno": la luce arriva da chi guarda, morbida su tutto il globo
+    vec3 sunDir = normalize(mix(uSun, v, uAlwaysDay));
+    float ndl = mix(dot(n, uSun), 0.55 + 0.45 * dot(n, v), uAlwaysDay);
     float dayMix = smoothstep(-0.12, 0.22, ndl);
 
     vec3 dayCol = texture2D(uDay, vUv).rgb;
@@ -784,22 +806,22 @@ void main() {
     nightCol = pow(nightCol, vec3(1.4)) * vec3(1.6, 1.25, 0.8);
 
     float cloud = texture2D(uClouds, vec2(vUv.x + uCloudShift, vUv.y)).r;
-    cloud = smoothstep(0.12, 0.95, cloud);
+    cloud = smoothstep(0.12, 0.95, cloud) * uCloudsOn;
     // ombra delle nuvole leggermente spostata
     float cloudShadow = texture2D(uClouds, vec2(vUv.x + uCloudShift + 0.0015, vUv.y + 0.001)).r;
 
     float light = max(ndl, 0.0);
-    vec3 lit = dayCol * (0.06 + 1.05 * light) * (1.0 - 0.35 * smoothstep(0.2, 1.0, cloudShadow));
+    vec3 lit = dayCol * (0.06 + 1.05 * light) * (1.0 - 0.35 * smoothstep(0.2, 1.0, cloudShadow) * uCloudsOn);
 
     // riflesso del sole sugli oceani
     float water = texture2D(uSpec, vUv).r;
-    vec3 h = normalize(uSun + v);
-    float spec = pow(max(dot(n, h), 0.0), 90.0) * water * 0.75 * dayMix;
-    float specWide = pow(max(dot(n, h), 0.0), 18.0) * water * 0.06 * dayMix;
+    vec3 h = normalize(sunDir + v);
+    float spec = pow(max(dot(n, h), 0.0), 90.0) * water * 0.75 * dayMix * uGlint;
+    float specWide = pow(max(dot(n, h), 0.0), 18.0) * water * 0.06 * dayMix * uGlint;
 
     // lato notte: luci delle città + leggera "luce lunare" per vedere i continenti
     vec3 moon = dayCol * vec3(0.16, 0.19, 0.27);
-    vec3 nightSide = moon + nightCol * (1.0 - cloud * 0.85);
+    vec3 nightSide = moon + nightCol * (1.0 - cloud * 0.85) * uCityLights;
     vec3 col = mix(nightSide, lit, dayMix);
     vec3 cloudCol = mix(vec3(0.12, 0.14, 0.2), vec3(1.0), smoothstep(-0.1, 0.4, ndl)) * (0.25 + 0.8 * light);
     col = mix(col, cloudCol, cloud * 0.92);
@@ -808,12 +830,12 @@ void main() {
     // diffusione atmosferica ai bordi
     float fres = pow(1.0 - max(dot(n, v), 0.0), 3.0);
     float sunSide = 0.15 + 0.85 * smoothstep(-0.3, 0.6, ndl);
-    col += vec3(0.30, 0.55, 1.0) * fres * 0.85 * sunSide;
+    col += vec3(0.30, 0.55, 1.0) * fres * 0.85 * sunSide * uAtmoOn;
     // tramonto: bordo del terminatore più caldo
     float dusk = smoothstep(-0.07, 0.0, ndl) * (1.0 - smoothstep(0.0, 0.08, ndl));
-    col += vec3(0.30, 0.12, 0.03) * dusk * 0.22 * (1.0 - cloud * 0.5);
+    col += vec3(0.30, 0.12, 0.03) * dusk * 0.22 * (1.0 - cloud * 0.5) * (1.0 - uAlwaysDay);
 
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(col * uBright, 1.0);
 }
 """
 
@@ -836,6 +858,7 @@ void main() {
 
 private const val ATMO_FS = PRECISION + """
 uniform vec3 uSun;
+uniform float uAlwaysDay;
 varying vec3 vViewPos;
 varying vec3 vViewN;
 varying vec3 vObjN;
@@ -845,7 +868,7 @@ void main() {
     float d = dot(n, v);           // < 0 sulle facce posteriori
     float k = smoothstep(0.0, 0.55, -d);
     float intensity = pow(k, 2.2) * 1.15;
-    float sunSide = 0.12 + 0.88 * smoothstep(-0.35, 0.55, dot(normalize(vObjN), uSun));
+    float sunSide = mix(0.12 + 0.88 * smoothstep(-0.35, 0.55, dot(normalize(vObjN), uSun)), 0.85, uAlwaysDay);
     vec3 col = mix(vec3(0.25, 0.45, 1.0), vec3(0.55, 0.78, 1.0), k) * intensity * sunSide;
     gl_FragColor = vec4(col, 1.0);
 }

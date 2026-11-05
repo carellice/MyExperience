@@ -15,7 +15,8 @@ MyExperience è un diario di viaggio per Android: un globo 3D con i luoghi che h
 
 ## Funzionalità
 
-- 🌍 Globo 3D interattivo con i tuoi luoghi
+- 🌍 Globo 3D interattivo con i tuoi luoghi, personalizzabile (luce, nuvole, riflessi, stelle…)
+- 🏅 Bollini da collezione dei patrimoni UNESCO italiani: si raccolgono a meno di 200 m dal sito
 - 📔 Album-diario per ogni viaggio, con temi, foto e video
 - 🚐 Album "on the road" con più tappe, mappa e percorso disegnato nel diario
 - 🧳 Pianificazione dei viaggi con tappe e cose da fare: a viaggio concluso diventa da solo un unico album

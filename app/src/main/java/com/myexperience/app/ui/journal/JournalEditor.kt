@@ -129,8 +129,8 @@ fun BlockEditorSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 "STICKER" -> {
-                    val chosen = draft.text.split(' ').filter { stickerIcon(it) != null }
-                    Label("Tocca per aggiungere o togliere (massimo 6)")
+                    val chosen = draft.text.split(' ').map { it.trim() }.filter { it.isNotEmpty() }
+                    Label("Icone · tocca per aggiungere o togliere (massimo 6)")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         StickerIcons.forEach { (key, icon) ->
                             val on = key in chosen
@@ -152,6 +152,39 @@ fun BlockEditorSheet(
                             }
                         }
                     }
+                    Label("Emoji")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        DiaryEmoji.forEach { e ->
+                            val on = e in chosen
+                            Box(
+                                Modifier.size(44.dp).clip(CircleShape)
+                                    .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                                    .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier)
+                                    .bounceClick {
+                                        val next = if (on) chosen - e else (chosen + e).take(6)
+                                        draft = draft.copy(text = next.joinToString(" "))
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) { Text(e, fontSize = 22.sp) }
+                        }
+                    }
+                    var typed by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = typed,
+                        onValueChange = { v ->
+                            // ogni emoji scritta dalla tastiera diventa una voce separata
+                            val found = splitEmoji(v)
+                            if (found.isNotEmpty()) {
+                                draft = draft.copy(text = (chosen + found).take(6).joinToString(" "))
+                                typed = ""
+                            } else typed = v
+                        },
+                        label = { Text("Altre emoji dalla tastiera") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = appTextFieldColors(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     TextButton(onClick = { draft = draft.copy(text = "") }) { Text("Svuota") }
                 }
             }
@@ -404,4 +437,27 @@ fun ThemePickerSheet(current: String, onDismiss: () -> Unit, onPick: (String) ->
             }
         }
     }
+}
+
+/** Emoji pronte per il diario. */
+private val DiaryEmoji = listOf(
+    "✈️", "🌍", "🗺️", "🧳", "📸", "🏖️", "🏔️", "🏙️", "🌅", "🌊", "🍝", "🍕", "🍷", "☕", "🍦", "🎒",
+    "🚆", "🚗", "🚢", "🚐", "⛺", "🏛️", "🎡", "🌸", "🌴", "❄️", "☀️", "🌙", "⭐", "✨", "❤️", "😍",
+    "🤩", "🥳", "😎", "🥹", "😌", "🤯", "😴", "🙏", "👣", "🎶", "📍", "🧭", "🎫", "🏨",
+)
+
+/** Divide il testo in emoji (grafemi non alfanumerici), scartando lettere e spazi. */
+private fun splitEmoji(text: String): List<String> {
+    val it = java.text.BreakIterator.getCharacterInstance()
+    it.setText(text)
+    val out = mutableListOf<String>()
+    var start = it.first()
+    var end = it.next()
+    while (end != java.text.BreakIterator.DONE) {
+        val g = text.substring(start, end)
+        if (g.isNotBlank() && g.none { c -> c.isLetterOrDigit() || c.isWhitespace() } && g.codePoints().anyMatch { cp -> cp > 0x2000 }) out += g
+        start = end
+        end = it.next()
+    }
+    return out
 }

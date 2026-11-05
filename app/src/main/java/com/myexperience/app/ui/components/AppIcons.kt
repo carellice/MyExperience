@@ -151,6 +151,13 @@ fun countryCode(country: String): String = codeCache.getOrPut(country.lowercase(
     } ?: ""
 }
 
+/** Bandiera emoji dal nome del paese, vuota se non riconosciuto. */
+fun countryFlag(country: String): String =
+    countryCode(country).uppercase().map { ch -> String(Character.toChars(0x1F1E6 + (ch - 'A'))) }.joinToString("")
+
+/** Bandiera seguita da uno spazio, o niente se il paese non è riconosciuto. */
+fun flagPrefix(country: String): String = countryFlag(country).let { if (it.isEmpty()) "" else "$it " }
+
 /** Icona che fluttua piano su e giù (sostituisce le emoji animate). */
 @Composable
 fun FloatingIcon(icon: ImageVector, size: Dp, tint: Color, modifier: Modifier = Modifier) {

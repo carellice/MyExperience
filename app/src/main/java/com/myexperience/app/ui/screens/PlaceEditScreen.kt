@@ -418,7 +418,7 @@ private fun StopRow(
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(stop.name, style = MaterialTheme.typography.titleSmall)
+            Text(flagPrefix(stop.country) + stop.name, style = MaterialTheme.typography.titleSmall)
             val sub = listOfNotNull(
                 stop.country.ifBlank { null },
                 if (stop.nights > 0) "${stop.nights} ${if (stop.nights == 1) "notte" else "notti"}" else null,

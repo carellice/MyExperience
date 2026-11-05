@@ -1,9 +1,15 @@
 package com.myexperience.app.ui.screens
 
+import android.Manifest
 import android.app.Activity
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +21,8 @@ import androidx.compose.material.icons.rounded.Luggage
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,8 +46,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.PickedLocation
+import com.myexperience.app.data.UNESCO_RADIUS_M
+import com.myexperience.app.data.UnescoSites
+import com.myexperience.app.data.distanceFrom
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.globe.GlobeMarker
+import com.myexperience.app.ui.globe.GlobeSettings
 import com.myexperience.app.ui.globe.GlobeView
 import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.Forest
@@ -50,11 +62,16 @@ import kotlinx.coroutines.launch
 /** Colori dei punti sul globo (allineati a GlobeView). */
 private val VisitedColor = Color(0xFFF0A26B)
 private val PlannedColor = Color(0xFF8FD3DE)
+private val UnescoColor = Color(0xFFFFCC47)
+
+/** Id dei punti UNESCO sul globo: negativi e lontani da quelli delle mete. */
+private const val UNESCO_ID_BASE = -1_000_000_000L
 
 private sealed interface GlobeSelection {
     data class Album(val placeId: Long) : GlobeSelection
     data class Trip(val tripId: Long, val destId: Long) : GlobeSelection
     data class NewSpot(val loc: PickedLocation, val resolving: Boolean) : GlobeSelection
+    data class Unesco(val index: Int) : GlobeSelection
 }
 
 /** Home: solo il globo 3D, a tutto schermo, senza scorrimento. */
@@ -64,9 +81,13 @@ fun HomeScreen(
     onOpenPlace: (Long) -> Unit,
     onOpenTrip: (Long) -> Unit,
     onAddAt: (PickedLocation) -> Unit,
+    onOpenUnesco: () -> Unit,
 ) {
     val places by vm.places.collectAsStateWithLifecycle()
     val trips by vm.trips.collectAsStateWithLifecycle()
+    val settings by vm.globeSettings.collectAsStateWithLifecycle()
+    val badges by vm.badges.collectAsStateWithLifecycle()
+    var showSettings by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var selection by remember { mutableStateOf<GlobeSelection?>(null) }
     var ready by remember { mutableStateOf(false) }
@@ -88,8 +109,32 @@ fun HomeScreen(
         }
     }
 
+    // posizione: serve per i bollini UNESCO, chiesta una volta sola
+    var locationGranted by remember { mutableStateOf(hasLocationPermission(context)) }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        locationGranted = r.values.any { it }
+    }
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("globe", Context.MODE_PRIVATE)
+        if (!locationGranted && !prefs.getBoolean("asked_location", false)) {
+            prefs.edit().putBoolean("asked_location", true).apply()
+            permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    }
+    var resumed by remember { mutableStateOf(true) }
+    val location by rememberDeviceLocation(locationGranted && resumed)
+    var nearSiteId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(location, badges) {
+        val loc = location ?: return@LaunchedEffect
+        if (nearSiteId != null || loc.accuracy > 200f) return@LaunchedEffect
+        nearSiteId = UnescoSites.firstOrNull { site ->
+            site.id !in badges && site.id !in vm.postponedBadges &&
+                site.distanceFrom(loc.latitude, loc.longitude) <= UNESCO_RADIUS_M
+        }?.id
+    }
+
     val placeList = places.orEmpty()
-    val markers = remember(places, trips, selection) {
+    val markers = remember(places, trips, selection, settings.showUnesco) {
         val list = mutableListOf<GlobeMarker>()
         // un punto per ogni tappa: le tappe di un album on the road si illuminano insieme
         placeList.forEach { p -> p.route.forEach { s -> list += GlobeMarker(p.place.id, s.latitude, s.longitude, 0) } }
@@ -97,6 +142,9 @@ fun HomeScreen(
             t.destinations.filter { !it.visited }.forEach { d ->
                 list += GlobeMarker(-d.id, d.latitude, d.longitude, 1)
             }
+        }
+        if (settings.showUnesco) {
+            UnescoSites.forEachIndexed { i, site -> list += GlobeMarker(UNESCO_ID_BASE - i, site.lat, site.lon, 3) }
         }
         (selection as? GlobeSelection.NewSpot)?.let {
             list += GlobeMarker(Long.MIN_VALUE, it.loc.latitude, it.loc.longitude, 2)
@@ -106,6 +154,7 @@ fun HomeScreen(
     val selectedMarkerId = when (val s = selection) {
         is GlobeSelection.Album -> s.placeId
         is GlobeSelection.Trip -> -s.destId
+        is GlobeSelection.Unesco -> UNESCO_ID_BASE - s.index
         else -> null
     }
 
@@ -123,6 +172,7 @@ fun HomeScreen(
             update = { g ->
                 g.setMarkers(markers, selectedMarkerId)
                 g.setAutoRotate(selection == null)
+                g.setSettings(settings)
                 g.onMarkerTap = { m ->
                     selection = when (m.kind) {
                         0 -> GlobeSelection.Album(m.id)
@@ -131,6 +181,7 @@ fun HomeScreen(
                             val trip = trips.orEmpty().firstOrNull { t -> t.destinations.any { it.id == destId } }
                             trip?.let { GlobeSelection.Trip(it.trip.id, destId) }
                         }
+                        3 -> GlobeSelection.Unesco((UNESCO_ID_BASE - m.id).toInt())
                         else -> selection
                     }
                     g.flyTo(m.lat, m.lon, true)
@@ -153,8 +204,15 @@ fun HomeScreen(
             val g = globeRef
             val obs = LifecycleEventObserver { _, e ->
                 when (e) {
-                    Lifecycle.Event.ON_RESUME -> g?.onResume()
-                    Lifecycle.Event.ON_PAUSE -> g?.onPause()
+                    Lifecycle.Event.ON_RESUME -> {
+                        g?.onResume()
+                        resumed = true
+                        locationGranted = hasLocationPermission(context)
+                    }
+                    Lifecycle.Event.ON_PAUSE -> {
+                        g?.onPause()
+                        resumed = false
+                    }
                     else -> Unit
                 }
             }
@@ -182,7 +240,12 @@ fun HomeScreen(
                 .statusBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 24.dp),
         ) {
-            Text("MyExperience", style = MaterialTheme.typography.headlineMedium.copy(brush = BrandBrush))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("MyExperience", style = MaterialTheme.typography.headlineMedium.copy(brush = BrandBrush), modifier = Modifier.weight(1f))
+                RoundGlassButton(Icons.Rounded.WorkspacePremium, "Patrimoni UNESCO", tint = UnescoColor, onClick = onOpenUnesco)
+                Spacer(Modifier.width(8.dp))
+                RoundGlassButton(Icons.Rounded.Tune, "Personalizza il globo") { showSettings = true }
+            }
             Text(
                 when {
                     placeList.isEmpty() -> "Il tuo mondo ti aspetta"
@@ -198,6 +261,7 @@ fun HomeScreen(
                 if (trips.orEmpty().any { t -> t.destinations.any { !it.visited } }) {
                     LegendDot(PlannedColor, "Da visitare")
                 }
+                if (settings.showUnesco) LegendDot(UnescoColor, "UNESCO")
             }
         }
 
@@ -220,6 +284,7 @@ fun HomeScreen(
                         is GlobeSelection.Album -> "a${s.placeId}"
                         is GlobeSelection.Trip -> "t${s.destId}"
                         is GlobeSelection.NewSpot -> "n"
+                        is GlobeSelection.Unesco -> "u${s.index}"
                         null -> "none"
                     }
                 },
@@ -260,7 +325,7 @@ fun HomeScreen(
                                     Spacer(Modifier.width(14.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text("DA VISITARE", color = PlannedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                                        Text(d.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                                        Text(flagPrefix(d.country) + d.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             "${t.trip.name} · ${countdownLabel(t.trip.startDate, t.trip.endDate)}",
                                             color = Color.White.copy(alpha = 0.75f),
@@ -269,6 +334,33 @@ fun HomeScreen(
                                         )
                                     }
                                     Text("Apri →", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    is GlobeSelection.Unesco -> {
+                        val site = UnescoSites.getOrNull(s.index)
+                        if (site != null) {
+                            val got = site.id in badges
+                            GlassPanel(onClick = onOpenUnesco) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    UnescoBadge(site, got, 64.dp)
+                                    Spacer(Modifier.width(14.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("PATRIMONIO UNESCO · ${site.year}", color = UnescoColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                        Text(
+                                            site.name, color = Color.White, style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            if (got) "Bollino raccolto" else "Avvicinati a meno di 200 m per raccogliere il bollino",
+                                            color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Rounded.Close, "Chiudi", tint = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(22.dp).bounceClick { selection = null },
+                                    )
                                 }
                             }
                         }
@@ -287,7 +379,7 @@ fun HomeScreen(
                                         Text("Cerco il luogo…", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                     } else {
                                         Text(
-                                            s.loc.name,
+                                            flagPrefix(s.loc.country) + s.loc.name,
                                             color = Color.White, style = MaterialTheme.typography.titleMedium,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         )
@@ -322,6 +414,87 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showSettings) {
+        GlobeSettingsSheet(settings, onChange = vm::updateGlobeSettings, onDismiss = { showSettings = false })
+    }
+
+    nearSiteId?.let { id ->
+        UnescoSites.firstOrNull { it.id == id }?.let { site ->
+            CollectBadgeDialog(
+                site,
+                onCollect = {
+                    vm.collectBadge(site.id)
+                    nearSiteId = null
+                },
+                onLater = {
+                    vm.postponedBadges += site.id
+                    nearSiteId = null
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoundGlassButton(icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, tint: Color = Color.White, onClick: () -> Unit) {
+    Box(
+        Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f)).bounceClick(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, desc, tint = tint, modifier = Modifier.size(22.dp)) }
+}
+
+/** Pannello per personalizzare il globo e renderlo più leggibile. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GlobeSettingsSheet(s: GlobeSettings, onChange: (GlobeSettings) -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF121B1E), contentColor = Color.White) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 22.dp, end = 22.dp, bottom = 28.dp),
+        ) {
+            Text("Personalizza il globo", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(12.dp))
+            SettingLabel("Illuminazione")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SelectChip("Giorno e notte reali", !s.alwaysDay) { onChange(s.copy(alwaysDay = false)) }
+                SelectChip("Tutto illuminato", s.alwaysDay) { onChange(s.copy(alwaysDay = true)) }
+            }
+            Spacer(Modifier.height(8.dp))
+            SettingSwitch("Riflesso del sole sugli oceani", s.sunGlint) { onChange(s.copy(sunGlint = it)) }
+            SettingSwitch("Nuvole", s.clouds) { onChange(s.copy(clouds = it)) }
+            SettingSwitch("Atmosfera", s.atmosphere) { onChange(s.copy(atmosphere = it)) }
+            if (!s.alwaysDay) SettingSwitch("Luci delle città di notte", s.cityLights) { onChange(s.copy(cityLights = it)) }
+            SettingSwitch("Stelle sullo sfondo", s.stars) { onChange(s.copy(stars = it)) }
+            SettingSwitch("Rotazione automatica", s.autoRotate) { onChange(s.copy(autoRotate = it)) }
+            SettingSwitch("Patrimoni UNESCO sul globo", s.showUnesco) { onChange(s.copy(showUnesco = it)) }
+            Spacer(Modifier.height(8.dp))
+            SettingLabel("Luminosità")
+            Slider(s.brightness, { onChange(s.copy(brightness = it)) }, valueRange = 0.7f..1.6f)
+            SettingLabel("Dimensione dei punti")
+            Slider(s.pinScale, { onChange(s.copy(pinScale = it)) }, valueRange = 0.6f..1.8f)
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { onChange(GlobeSettings()) }) { Text("Ripristina predefiniti") }
+        }
+    }
+}
+
+@Composable
+private fun SettingLabel(text: String) {
+    Text(
+        text.uppercase(), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp,
+        fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, modifier = Modifier.padding(vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun SettingSwitch(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).bounceClick { onChange(!checked) }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked, onChange)
     }
 }
 
@@ -390,7 +563,7 @@ private fun AlbumPreviewCard(
                 val route = p.route
                 Text(
                     (if (route.size > 1) "${route.first().name} → ${route.last().name} · ${route.size} tappe"
-                    else place.locationName + countryCode(place.country).let { if (it.isNotEmpty()) " · $it" else "" }).uppercase(),
+                    else flagPrefix(place.country) + place.locationName).uppercase(),
                     color = VisitedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
