@@ -18,6 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddAPhoto
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.PhotoAlbum
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -109,9 +112,9 @@ fun ProfileScreen(
                             )
                         ),
                 ) {
-                    Text(
-                        "🌍", fontSize = 130.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd).offset(x = 30.dp)
+                    Icon(
+                        Icons.Rounded.Public, null, tint = Color.White,
+                        modifier = Modifier.align(Alignment.CenterEnd).offset(x = 30.dp).size(160.dp)
                             .graphicsLayer { alpha = 0.18f; rotationZ = shift * 30f },
                     )
                 }
@@ -164,10 +167,10 @@ fun ProfileScreen(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { SelectChip("Tutti · ${all.size}", filter == null) { filter = null } }
                         if (all.any { it.place.favorite }) {
-                            item { SelectChip("❤️ Preferiti", filter == "♥") { filter = "♥" } }
+                            item { SelectChip("Preferiti", filter == "♥", Icons.Rounded.Favorite) { filter = "♥" } }
                         }
                         items(countries, key = { it.key }) { (c, n) ->
-                            SelectChip("${countryFlag(c)} $c · $n", filter == c) { filter = if (filter == c) null else c }
+                            SelectChip("$c · $n", filter == c) { filter = if (filter == c) null else c }
                         }
                     }
                 }
@@ -177,7 +180,7 @@ fun ProfileScreen(
         if (all.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 EmptyState(
-                    "📔", "Nessun album ancora",
+                    Icons.Rounded.PhotoAlbum, "Nessun album ancora",
                     "Ogni viaggio diventa un album-diario. Crealo dal globo tenendo premuto su un luogo, oppure con il pulsante +.",
                     actionText = "Crea il primo album", onAction = onAdd,
                 )
@@ -264,14 +267,15 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
             .bounceClick(onClick = onClick),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(0.82f)) {
-            CoverImage(place.coverPath, place.id, Modifier.fillMaxSize(), emoji = categoryEmoji(place.category), emojiSize = 44)
+            CoverImage(place.coverPath, place.id, Modifier.fillMaxSize(), icon = categoryIcon(place.category), iconSize = 44.dp)
             Box(
                 Modifier.fillMaxSize().background(
                     Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.7f)))
                 ),
             )
             Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                GlassChip(p.countries.ifEmpty { listOf(place.country) }.take(4).joinToString("") { countryFlag(it) })
+                val codes = p.countries.map { countryCode(it) }.filter { it.isNotEmpty() }.take(4)
+                if (codes.isNotEmpty()) GlassChip(codes.joinToString(" · "))
                 if (place.favorite) {
                     Box(
                         Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)),
@@ -291,7 +295,7 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                 )
                 val route = p.route
                 Text(
-                    if (route.size > 1) "🚐 ${route.joinToString(" → ") { it.name }}" else place.locationName,
+                    if (route.size > 1) route.joinToString(" → ") { it.name } else place.locationName,
                     color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
@@ -303,7 +307,9 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text("📷 ${p.media.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Rounded.PhotoLibrary, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("${p.media.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

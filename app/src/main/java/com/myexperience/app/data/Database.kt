@@ -74,6 +74,9 @@ interface PlaceDao {
     @Query("SELECT * FROM journal_blocks WHERE placeId = :placeId ORDER BY orderIndex, id")
     suspend fun blocksFor(placeId: Long): List<JournalBlock>
 
+    @Query("SELECT * FROM journal_blocks")
+    suspend fun allBlocks(): List<JournalBlock>
+
     @Insert
     suspend fun insertBlock(block: JournalBlock): Long
 

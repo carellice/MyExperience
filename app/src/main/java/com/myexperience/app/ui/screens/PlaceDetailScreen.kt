@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -128,7 +129,7 @@ fun PlaceDetailScreen(
                             val s = 1f + off / 3000f
                             scaleX = s; scaleY = s
                         },
-                        emoji = categoryEmoji(p.category), emojiSize = 110,
+                        icon = categoryIcon(p.category), iconSize = 110.dp,
                     )
                     Box(
                         Modifier.fillMaxSize().background(
@@ -144,11 +145,15 @@ fun PlaceDetailScreen(
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 22.dp, vertical = 18.dp).appear()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (route.size > 1) {
-                                GlassChip("🚐 ${route.size} tappe · ${d.countries.joinToString("") { countryFlag(it) }}")
+                                val codes = d.countries.map { countryCode(it) }.filter { it.isNotEmpty() }
+                                GlassChip(
+                                    "${route.size} tappe" + if (codes.isNotEmpty()) " · ${codes.joinToString(" ")}" else "",
+                                    icon = Icons.Rounded.Route,
+                                )
                             } else {
-                                GlassChip("${countryFlag(p.country)} ${p.locationName}")
+                                GlassChip(p.locationName, icon = Icons.Rounded.Place)
                             }
-                            GlassChip(p.mood)
+                            GlassChip("", icon = moodFor(p.mood).icon)
                         }
                         Spacer(Modifier.height(10.dp))
                         Text(
@@ -177,7 +182,7 @@ fun PlaceDetailScreen(
                                 drawRoute = true,
                                 interactive = false,
                             )
-                            GlassChip("🧭 On the road", Modifier.padding(10.dp))
+                            GlassChip("On the road", Modifier.padding(10.dp), icon = Icons.Rounded.Explore)
                         }
                         Spacer(Modifier.height(10.dp))
                         Row(
@@ -187,7 +192,7 @@ fun PlaceDetailScreen(
                             route.forEachIndexed { i, s ->
                                 if (i > 0) Text("  →  ", color = theme.soft, fontSize = 13.sp)
                                 Text(
-                                    "${i + 1}. ${s.name}" + if (s.nights > 0) " · 🌙${s.nights}" else "",
+                                    "${i + 1}. ${s.name}" + if (s.nights > 0) " · ${s.nights} ${if (s.nights == 1) "notte" else "notti"}" else "",
                                     color = theme.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                                     modifier = Modifier.clip(RoundedCornerShape(50))
                                         .background(theme.accent.copy(alpha = 0.12f))
@@ -205,13 +210,19 @@ fun PlaceDetailScreen(
                     Modifier.fillMaxWidth().diaryPage(theme).padding(start = 40.dp, end = 20.dp, top = 6.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("📖 Diario di viaggio", color = theme.soft, fontFamily = theme.font, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = theme.soft, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Diario di viaggio", color = theme.soft, fontFamily = theme.font, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     AnimatedVisibility(editMode) {
-                        Text(
-                            "${theme.emoji} Tema", color = theme.accent, fontWeight = FontWeight.Bold, fontSize = 13.sp,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, theme.accent, RoundedCornerShape(50))
+                        Row(
+                            Modifier.clip(RoundedCornerShape(50)).border(1.dp, theme.accent, RoundedCornerShape(50))
                                 .bounceClick { showThemes = true }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(theme.icon, null, tint = theme.accent, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text("Tema", color = theme.accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
                 }
             }
@@ -222,7 +233,7 @@ fun PlaceDetailScreen(
                         Modifier.fillMaxWidth().diaryPage(theme).padding(horizontal = 32.dp, vertical = 28.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        FloatingEmoji("✍️", 48)
+                        FloatingIcon(Icons.Rounded.EditNote, 48.dp, theme.accent)
                         Spacer(Modifier.height(8.dp))
                         Text("La pagina è ancora bianca", color = theme.ink, fontFamily = theme.font, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Text(
@@ -326,7 +337,8 @@ fun PlaceDetailScreen(
                                 .bounceClick(onClick = importToRoll).padding(28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text("📷", fontSize = 36.sp)
+                            Icon(Icons.Rounded.AddAPhoto, null, tint = theme.accent, modifier = Modifier.size(36.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text("Aggiungi le foto e i video del viaggio", style = MaterialTheme.typography.titleSmall)
                         }
                     }
@@ -354,7 +366,11 @@ fun PlaceDetailScreen(
                                 ) { Icon(Icons.Rounded.PlayArrow, null, tint = Color.White) }
                             }
                             if (m.path == p.coverPath) {
-                                Text("⭐", fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
+                                Box(
+                                    Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center,
+                                ) { Icon(Icons.Rounded.Star, "Copertina", tint = Color.White, modifier = Modifier.size(13.dp)) }
                             }
                         }
                     }

@@ -8,6 +8,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Luggage
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,17 +50,17 @@ fun TripsScreen(vm: MainViewModel, onOpenTrip: (Long) -> Unit, onNewTrip: () -> 
                 ) {
                     Text("Viaggi da organizzare", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "Pianifica mete, tappe e checklist della prossima avventura ✈️",
+                        "Pianifica mete, tappe e checklist della prossima avventura",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (!list.isNullOrEmpty()) {
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            InfoChip("🧳 ${list.size} viaggi")
-                            InfoChip("📍 ${list.sumOf { it.destinations.size }} mete")
+                            InfoChip("${list.size} viaggi", icon = Icons.Rounded.Luggage)
+                            InfoChip("${list.sumOf { it.destinations.size }} mete", icon = Icons.Rounded.Place)
                             val todo = list.sumOf { t -> t.tasks.count { !it.done } }
-                            if (todo > 0) InfoChip("📝 $todo da fare")
+                            if (todo > 0) InfoChip("$todo da fare", icon = Icons.Rounded.Checklist)
                         }
                     }
                 }
@@ -64,7 +69,7 @@ fun TripsScreen(vm: MainViewModel, onOpenTrip: (Long) -> Unit, onNewTrip: () -> 
                 list == null -> Unit
                 list.isEmpty() -> item {
                     EmptyState(
-                        "🗺️", "Nessun viaggio in programma",
+                        Icons.Rounded.Map, "Nessun viaggio in programma",
                         "Crea un viaggio, aggiungi le mete sulla mappa, organizza date, budget e checklist.",
                         actionText = "Organizza un viaggio", onAction = onNewTrip,
                     )
@@ -117,19 +122,19 @@ fun TripCard(t: TripWithDetails, modifier: Modifier = Modifier, onClick: () -> U
             .background(Brush.linearGradient(colors))
             .bounceClick(onClick = onClick),
     ) {
-        Text(
-            if (t.trip.transport.isNotBlank()) t.trip.transport.substringBefore(' ') else "🧳",
-            fontSize = 110.sp,
+        Icon(
+            transportIcon(t.trip.transport), null, tint = Color.White,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .offset(x = 24.dp)
-                .graphicsLayer { alpha = 0.25f; rotationZ = rot },
+                .size(120.dp)
+                .graphicsLayer { alpha = 0.22f; rotationZ = rot },
         )
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GlassChip("⏳ ${countdownLabel(t.trip.startDate, t.trip.endDate)}")
+                GlassChip(countdownLabel(t.trip.startDate, t.trip.endDate), icon = Icons.Rounded.HourglassTop)
                 Spacer(Modifier.width(8.dp))
-                if (t.destinations.isNotEmpty()) GlassChip("📍 ${t.destinations.size}")
+                if (t.destinations.isNotEmpty()) GlassChip("${t.destinations.size}", icon = Icons.Rounded.Place)
             }
             Spacer(Modifier.height(14.dp))
             Text(

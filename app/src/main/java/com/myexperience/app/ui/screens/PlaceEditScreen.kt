@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -264,17 +265,17 @@ fun PlaceEditScreen(
             FormCard(Modifier.appear(2)) {
                 FieldLabel("Tipo di esperienza")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Categories.forEach { (name, emoji) ->
-                        SelectChip("$emoji $name", category == name) { category = name }
+                    Categories.forEach { name ->
+                        SelectChip(name, category == name, categoryIcon(name)) { category = name }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
-                FieldLabel("Mood")
+                FieldLabel("Mood · ${moodFor(mood).label}")
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Moods.forEach { m ->
-                        val sel = m == mood
+                        val sel = m.key == mood
                         val s by animateFloatAsState(
-                            if (sel) 1.25f else 1f,
+                            if (sel) 1.2f else 1f,
                             spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                             label = "mood",
                         )
@@ -284,9 +285,15 @@ fun PlaceEditScreen(
                                 .graphicsLayer { scaleX = s; scaleY = s }
                                 .clip(CircleShape)
                                 .background(if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                .bounceClick { mood = m },
+                                .bounceClick { mood = m.key },
                             contentAlignment = Alignment.Center,
-                        ) { Text(m, fontSize = 20.sp) }
+                        ) {
+                            Icon(
+                                m.icon, m.label,
+                                tint = if (sel) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -304,8 +311,8 @@ fun PlaceEditScreen(
                 )
             }
             Text(
-                if (placeId == 0L) "✨ Dopo il salvataggio troverai una pagina di diario già impaginata, pronta da personalizzare."
-                else "Il diario si modifica dall'album con ✏️ Personalizza.",
+                if (placeId == 0L) "Dopo il salvataggio troverai una pagina di diario già impaginata, pronta da personalizzare."
+                else "Il diario si modifica dall'album con Personalizza.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp),
@@ -338,7 +345,8 @@ fun PlaceEditScreen(
         var notes by remember(i, s) { mutableStateOf(s.notes) }
         AlertDialog(
             onDismissRequest = { editStop = null },
-            title = { Text("📍 Tappa ${i + 1}") },
+            icon = { Icon(Icons.Rounded.Place, null) },
+            title = { Text("Tappa ${i + 1}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(name, { name = it }, label = { Text("Nome luogo") }, singleLine = true, shape = RoundedCornerShape(16.dp))
@@ -410,10 +418,10 @@ private fun StopRow(
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("${countryFlag(stop.country)} ${stop.name}", style = MaterialTheme.typography.titleSmall)
+            Text(stop.name, style = MaterialTheme.typography.titleSmall)
             val sub = listOfNotNull(
                 stop.country.ifBlank { null },
-                if (stop.nights > 0) "🌙 ${stop.nights}" else null,
+                if (stop.nights > 0) "${stop.nights} ${if (stop.nights == 1) "notte" else "notti"}" else null,
             ).joinToString(" · ").ifBlank { "Tocca per modificare" }
             Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -430,7 +438,7 @@ private fun StopRow(
 
 
 @Composable
-fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
+fun SelectChip(text: String, selected: Boolean, icon: ImageVector? = null, onClick: () -> Unit) {
     val bg by animateColorAsState(
         if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         label = "chip",
@@ -443,5 +451,13 @@ fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
             .then(if (!selected) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50)) else Modifier)
             .bounceClick(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
-    ) { Text(text, color = fg, style = MaterialTheme.typography.labelLarge) }
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(text, color = fg, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }

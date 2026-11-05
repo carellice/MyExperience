@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -114,7 +115,7 @@ fun TripEditScreen(vm: MainViewModel, tripId: Long, onBack: () -> Unit, onSaved:
                     .appear(0),
             ) {
                 Column(Modifier.align(Alignment.BottomStart)) {
-                    GlassChip("⏳ ${countdownLabel(start, end)}")
+                    GlassChip(countdownLabel(start, end), icon = Icons.Rounded.HourglassTop)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         name.ifBlank { "Il mio prossimo viaggio" },
@@ -122,10 +123,7 @@ fun TripEditScreen(vm: MainViewModel, tripId: Long, onBack: () -> Unit, onSaved:
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
-                FloatingEmoji(
-                    if (transport.isNotBlank()) transport.substringBefore(' ') else "🧳", 48,
-                    Modifier.align(Alignment.TopEnd),
-                )
+                FloatingIcon(transportIcon(transport), 48.dp, Color.White, Modifier.align(Alignment.TopEnd))
             }
 
             FormCard(Modifier.appear(1)) {
@@ -182,7 +180,8 @@ fun TripEditScreen(vm: MainViewModel, tripId: Long, onBack: () -> Unit, onSaved:
                 FieldLabel("Come ci arrivi")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Transports.forEach { t ->
-                        SelectChip(t, transport == t) { transport = if (transport == t) "" else t }
+                        val sel = transportLabel(transport) == t
+                        SelectChip(t, sel, transportIcon(t)) { transport = if (sel) "" else t }
                     }
                 }
                 Spacer(Modifier.height(14.dp))

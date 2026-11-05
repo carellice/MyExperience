@@ -11,9 +11,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.rounded.FormatAlignRight
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Flight
 import androidx.compose.material.icons.rounded.FormatAlignCenter
+import androidx.compose.material.icons.rounded.HorizontalRule
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Timeline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,18 +38,15 @@ import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.Place
 import com.myexperience.app.data.PlaceStop
 import com.myexperience.app.ui.components.GradientButton
+import com.myexperience.app.ui.components.IconBadge
+import com.myexperience.app.ui.components.StickerIcons
+import com.myexperience.app.ui.components.stickerIcon
 import com.myexperience.app.ui.components.appTextFieldColors
 import com.myexperience.app.ui.components.bounceClick
 import com.myexperience.app.ui.screens.SelectChip
 import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.Sea
 import java.io.File
-
-val StickerEmojis = listOf(
-    "✈️", "🌍", "🗺️", "🧳", "📸", "🏖️", "🏔️", "🏙️", "🌅", "🌊", "🍝", "🍕", "🍣", "🍷", "☕", "🍦",
-    "🎒", "🚆", "🚗", "🚢", "⛺", "🏛️", "🎡", "🌸", "🌴", "🌵", "🍁", "❄️", "☀️", "🌙", "⭐", "✨",
-    "❤️", "😍", "🤩", "🥳", "😎", "🥹", "🙏", "👣", "🎶", "📍", "🧭", "🎫", "🏨", "💶", "🗽", "🗼",
-)
 
 private val textTypes = setOf("HEADING", "TEXT", "QUOTE", "NOTE", "LIST")
 
@@ -75,7 +79,13 @@ fun BlockEditorSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("${info?.emoji ?: ""}  ${info?.label ?: "Elemento"}", style = MaterialTheme.typography.titleLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (info != null) {
+                    IconBadge(info.icon, size = 36.dp, container = MaterialTheme.colorScheme.primaryContainer, tint = MaterialTheme.colorScheme.onPrimaryContainer, corner = 12.dp)
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(info?.label ?: "Elemento", style = MaterialTheme.typography.titleLarge)
+            }
 
             // anteprima
             Box(
@@ -119,23 +129,27 @@ fun BlockEditorSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 "STICKER" -> {
-                    OutlinedTextField(
-                        value = draft.text,
-                        onValueChange = { draft = draft.copy(text = it) },
-                        label = { Text("I tuoi sticker") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        colors = appTextFieldColors(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        StickerEmojis.forEach { e ->
+                    val chosen = draft.text.split(' ').filter { stickerIcon(it) != null }
+                    Label("Tocca per aggiungere o togliere (massimo 6)")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        StickerIcons.forEach { (key, icon) ->
+                            val on = key in chosen
                             Box(
-                                Modifier.size(42.dp).clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .bounceClick { draft = draft.copy(text = (draft.text + " " + e).trim()) },
+                                Modifier.size(44.dp).clip(CircleShape)
+                                    .background(if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
+                                    .then(if (on) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier)
+                                    .bounceClick {
+                                        val next = if (on) chosen - key else (chosen + key).take(6)
+                                        draft = draft.copy(text = next.joinToString(" "))
+                                    },
                                 contentAlignment = Alignment.Center,
-                            ) { Text(e, fontSize = 22.sp) }
+                            ) {
+                                Icon(
+                                    icon, key,
+                                    tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
                         }
                     }
                     TextButton(onClick = { draft = draft.copy(text = "") }) { Text("Svuota") }
@@ -198,8 +212,8 @@ fun BlockEditorSheet(
                 if (!multiple) {
                     Label("Stile")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SelectChip("📷 Polaroid", draft.style != "full") { draft = draft.copy(style = "polaroid") }
-                        SelectChip("🖼️ Grande", draft.style == "full") { draft = draft.copy(style = "full") }
+                        SelectChip("Polaroid", draft.style != "full", Icons.Rounded.PhotoCamera) { draft = draft.copy(style = "polaroid") }
+                        SelectChip("Grande", draft.style == "full", Icons.Rounded.Image) { draft = draft.copy(style = "full") }
                     }
                 }
             }
@@ -219,6 +233,13 @@ fun BlockEditorSheet(
                     listOf("S", "M", "L", "XL").forEachIndexed { i, s ->
                         SelectChip(s, draft.size == i) { draft = draft.copy(size = i) }
                     }
+                }
+            }
+            if (draft.type == "STICKER") {
+                Label("Colore")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SelectChip("Multicolore", draft.color == 0) { draft = draft.copy(color = 0) }
+                    SelectChip("Un colore", draft.color != 0) { draft = draft.copy(color = 4) }
                 }
             }
             if (draft.type in textTypes || draft.type == "STICKER" || draft.type == "STAMP") {
@@ -266,16 +287,16 @@ fun BlockEditorSheet(
             if (draft.type == "DIVIDER") {
                 Label("Stile")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SelectChip("✈ Aereo", draft.style.isBlank() || draft.style == "plane") { draft = draft.copy(style = "plane") }
-                    SelectChip("✦ Stelle", draft.style == "stars") { draft = draft.copy(style = "stars") }
-                    SelectChip("– – Linea", draft.style == "line") { draft = draft.copy(style = "line") }
+                    SelectChip("Aereo", draft.style.isBlank() || draft.style == "plane", Icons.Rounded.Flight) { draft = draft.copy(style = "plane") }
+                    SelectChip("Stelle", draft.style == "stars", Icons.Rounded.AutoAwesome) { draft = draft.copy(style = "stars") }
+                    SelectChip("Linea", draft.style == "line", Icons.Rounded.HorizontalRule) { draft = draft.copy(style = "line") }
                 }
             }
             if (draft.type == "ROUTE") {
                 Label("Linea del percorso")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SelectChip("〰 Continua", draft.style != "dashed") { draft = draft.copy(style = "") }
-                    SelectChip("┄ Tratteggiata", draft.style == "dashed") { draft = draft.copy(style = "dashed") }
+                    SelectChip("Continua", draft.style != "dashed", Icons.Rounded.Timeline) { draft = draft.copy(style = "") }
+                    SelectChip("Tratteggiata", draft.style == "dashed", Icons.Rounded.MoreHoriz) { draft = draft.copy(style = "dashed") }
                 }
                 Text(
                     "Le tappe si modificano da ⋮ › Dati dell'esperienza.",
@@ -335,10 +356,7 @@ fun BlockPaletteSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface),
-                                contentAlignment = Alignment.Center,
-                            ) { Text(bt.emoji, fontSize = 20.sp) }
+                            IconBadge(bt.icon, container = MaterialTheme.colorScheme.surface, tint = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(bt.label, style = MaterialTheme.typography.titleSmall)
@@ -374,7 +392,7 @@ fun ThemePickerSheet(current: String, onDismiss: () -> Unit, onPick: (String) ->
                                 .padding(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(t.emoji, fontSize = 24.sp)
+                            Icon(t.icon, null, tint = t.accent, modifier = Modifier.size(26.dp))
                             Text("Aa", color = t.ink, fontFamily = t.font, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                             Box(Modifier.size(width = 30.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(t.accent))
                             Spacer(Modifier.height(6.dp))

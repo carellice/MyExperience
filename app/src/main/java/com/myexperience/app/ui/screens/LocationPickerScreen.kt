@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
@@ -170,7 +171,12 @@ fun LocationPickerScreen(vm: MainViewModel, target: String, onDone: () -> Unit) 
                     Box(
                         Modifier.size(44.dp).clip(CircleShape).background(BrandBrush),
                         contentAlignment = Alignment.Center,
-                    ) { Text(if (sel == null) "🧭" else "📍") }
+                    ) {
+                        Icon(
+                            if (sel == null) Icons.Rounded.Explore else Icons.Rounded.Place, null,
+                            tint = Color.White, modifier = Modifier.size(24.dp),
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         if (sel == null) {

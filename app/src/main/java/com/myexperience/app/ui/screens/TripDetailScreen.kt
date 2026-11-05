@@ -14,6 +14,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import android.widget.Toast
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Hotel
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.PhotoAlbum
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -90,11 +101,12 @@ fun TripDetailScreen(
                     .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
                     .background(Brush.linearGradient(colors)),
             ) {
-                Text(
-                    "✈️", fontSize = 64.sp,
+                Icon(
+                    transportIcon(trip.transport), null, tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 24.dp)
+                        .size(72.dp)
                         .graphicsLayer {
                             translationX = -40f + fly * 80f
                             translationY = 20f - fly * 40f
@@ -115,10 +127,10 @@ fun TripDetailScreen(
                         Text(formatRange(trip.startDate, trip.endDate), color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            GlassChip("⏳ ${countdownLabel(trip.startDate, trip.endDate)}")
+                            GlassChip(countdownLabel(trip.startDate, trip.endDate), icon = Icons.Rounded.HourglassTop)
                             if (trip.startDate != null) {
                                 val days = daysBetween(trip.startDate, trip.endDate ?: trip.startDate)
-                                GlassChip("🗓️ $days giorni")
+                                GlassChip("$days giorni", icon = Icons.Rounded.CalendarMonth)
                             }
                         }
                     }
@@ -144,7 +156,7 @@ fun TripDetailScreen(
                         drawRoute = true,
                         interactive = false,
                     )
-                    GlassChip("🧭 Itinerario", Modifier.padding(12.dp))
+                    GlassChip("Itinerario", Modifier.padding(12.dp), icon = Icons.Rounded.Explore)
                 }
             }
         }
@@ -171,7 +183,7 @@ fun TripDetailScreen(
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    FloatingEmoji("📍", 40)
+                    FloatingIcon(Icons.Rounded.AddLocationAlt, 40.dp, MaterialTheme.colorScheme.primary)
                     Text("Aggiungi la prima meta", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Cercala o scegli un punto sulla mappa",
@@ -203,10 +215,17 @@ fun TripDetailScreen(
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(16.dp),
                 ) {
-                    Text(
-                        if (d.destinations.size > 1) "🚐 Diventerà un album on the road" else "📔 Diventerà un album",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (d.destinations.size > 1) Icons.Rounded.Route else Icons.Rounded.PhotoAlbum, null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (d.destinations.size > 1) "Diventerà un album on the road" else "Diventerà un album",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                    }
                     Text(
                         "Quando il viaggio finisce, tutte le tappe confluiscono in automatico in un unico album-diario. " +
                             "Puoi anche chiuderlo subito.",
@@ -316,12 +335,12 @@ fun TripDetailScreen(
             SectionTitle("Dettagli", Modifier.padding(top = 12.dp))
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    InfoTile("💶", "Budget", trip.budget.ifBlank { "—" }.let { if (it != "—" && !it.contains("€")) "$it €" else it }, Modifier.weight(1f))
-                    InfoTile("🚀", "Trasporto", trip.transport.ifBlank { "—" }, Modifier.weight(1f))
+                    InfoTile(Icons.Rounded.Payments, "Budget", trip.budget.ifBlank { "—" }.let { if (it != "—" && !it.contains("€")) "$it €" else it }, Modifier.weight(1f))
+                    InfoTile(transportIcon(trip.transport), "Trasporto", transportLabel(trip.transport).ifBlank { "—" }, Modifier.weight(1f))
                 }
-                InfoTile("🏨", "Alloggio", trip.accommodation.ifBlank { "—" }, Modifier.fillMaxWidth())
+                InfoTile(Icons.Rounded.Hotel, "Alloggio", trip.accommodation.ifBlank { "—" }, Modifier.fillMaxWidth())
                 if (trip.notes.isNotBlank()) {
-                    InfoTile("📝", "Note", trip.notes, Modifier.fillMaxWidth())
+                    InfoTile(Icons.Rounded.EditNote, "Note", trip.notes, Modifier.fillMaxWidth())
                 }
             }
         }
@@ -376,7 +395,8 @@ fun TripDetailScreen(
         var name by remember(dest.id) { mutableStateOf(dest.name) }
         AlertDialog(
             onDismissRequest = { editDest = null },
-            title = { Text("📍 ${dest.name}") },
+            icon = { Icon(Icons.Rounded.Place, null) },
+            title = { Text(dest.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(name, { name = it }, label = { Text("Nome") }, singleLine = true, shape = RoundedCornerShape(16.dp))
@@ -456,7 +476,7 @@ private fun TimelineItem(
                         Text(dest.country, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                InfoChip(if (dest.nights == 1) "🌙 1 notte" else "🌙 ${dest.nights} notti")
+                InfoChip(if (dest.nights == 1) "1 notte" else "${dest.nights} notti", icon = Icons.Rounded.Bedtime)
             }
             if (dest.notes.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
@@ -464,20 +484,23 @@ private fun TimelineItem(
             }
             Spacer(Modifier.height(10.dp))
             if (dest.visited) {
-                InfoChip("✅ Visitata", container = Moss.copy(alpha = 0.2f), modifier = Modifier.bounceClick(onClick = onVisited))
+                InfoChip("Visitata", container = Moss.copy(alpha = 0.2f), modifier = Modifier.bounceClick(onClick = onVisited), icon = Icons.Rounded.CheckCircle)
             } else {
-                Text(
-                    "✓ Segna come visitata",
-                    style = MaterialTheme.typography.labelLarge.copy(brush = BrandBrush),
-                    modifier = Modifier.bounceClick(onClick = onVisited).padding(vertical = 4.dp),
-                )
+                Row(
+                    Modifier.bounceClick(onClick = onVisited).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.Check, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Segna come visitata", style = MaterialTheme.typography.labelLarge.copy(brush = BrandBrush))
+                }
             }
         }
     }
 }
 
 @Composable
-private fun InfoTile(emoji: String, label: String, value: String, modifier: Modifier = Modifier) {
+private fun InfoTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
     Row(
         modifier
             .clip(RoundedCornerShape(22.dp))
@@ -485,10 +508,7 @@ private fun InfoTile(emoji: String, label: String, value: String, modifier: Modi
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Box(
-            Modifier.size(40.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) { Text(emoji, fontSize = 20.sp) }
+        IconBadge(icon, container = MaterialTheme.colorScheme.primaryContainer, tint = MaterialTheme.colorScheme.onPrimaryContainer)
         Spacer(Modifier.width(12.dp))
         Column {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

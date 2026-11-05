@@ -42,7 +42,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
 
     init {
-        viewModelScope.launch { repo.addMissingRoutes() }
+        viewModelScope.launch {
+            repo.addMissingRoutes()
+            repo.convertEmojiStickers()
+        }
     }
 
     fun place(id: Long): Flow<PlaceWithMedia?> = repo.place(id)

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,30 +58,7 @@ import java.util.Locale
 
 // ---------------- Costanti di dominio ----------------
 
-val Categories = listOf(
-    "Città" to "🏙️", "Mare" to "🏖️", "Montagna" to "🏔️", "Natura" to "🌿",
-    "Cultura" to "🏛️", "Food" to "🍝", "Avventura" to "🧗", "Relax" to "🧘",
-    "On the road" to "🚐",
-)
-val Moods = listOf("😍", "🤩", "🥳", "😌", "🤯", "🥹", "😎", "😴")
-val Transports = listOf("✈️ Aereo", "🚆 Treno", "🚗 Auto", "🚢 Nave", "🚌 Bus", "🏍️ Moto")
-
-fun categoryEmoji(c: String) = Categories.firstOrNull { it.first == c }?.second ?: "📍"
-
-private val flagCache = mutableMapOf<String, String>()
-
-/** Bandiera emoji dal nome del paese (in qualsiasi lingua comune), altrimenti 🌐. */
-fun countryFlag(country: String): String = flagCache.getOrPut(country.lowercase()) {
-    val name = country.trim().lowercase()
-    val langs = listOf(Locale.getDefault(), Locale.ITALIAN, Locale.ENGLISH, Locale("es"), Locale("fr"), Locale("de"), Locale("pt"))
-    val code = Locale.getISOCountries().firstOrNull { iso ->
-        val loc = Locale("", iso)
-        langs.any { loc.getDisplayCountry(it).lowercase() == name } || iso.lowercase() == name
-    }
-    if (code == null) "🌐" else code.uppercase().map { ch ->
-        String(Character.toChars(0x1F1E6 + (ch - 'A')))
-    }.joinToString("")
-}
+val Categories = listOf("Città", "Mare", "Montagna", "Natura", "Cultura", "Food", "Avventura", "Relax", "On the road")
 
 // ---------------- Date ----------------
 
@@ -116,7 +94,7 @@ fun countdownLabel(start: Long?, end: Long?): String {
         d > 1 -> "tra $d giorni"
         d == 1L -> "domani!"
         d == 0L -> "si parte oggi!"
-        endD >= 0 -> "in corso ✨"
+        endD >= 0 -> "in corso"
         else -> "concluso"
     }
 }
@@ -181,14 +159,14 @@ fun GradientButton(
     }
 }
 
-/** Immagine di copertina o, se manca, gradiente con emoji. */
+/** Immagine di copertina o, se manca, gradiente con l'icona della categoria. */
 @Composable
 fun CoverImage(
     path: String?,
     seed: Long,
     modifier: Modifier = Modifier,
-    emoji: String = "🌍",
-    emojiSize: Int = 56,
+    icon: ImageVector = Icons.Rounded.Public,
+    iconSize: Dp = 56.dp,
 ) {
     Box(modifier.background(gradientFor(seed)), contentAlignment = Alignment.Center) {
         if (path != null) {
@@ -199,20 +177,9 @@ fun CoverImage(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            FloatingEmoji(emoji, emojiSize)
+            FloatingIcon(icon, iconSize, Color.White.copy(alpha = 0.92f))
         }
     }
-}
-
-@Composable
-fun FloatingEmoji(emoji: String, size: Int = 56, modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition(label = "float")
-    val y by t.animateFloat(
-        -6f, 6f,
-        infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "y",
-    )
-    Text(emoji, fontSize = size.sp, modifier = modifier.graphicsLayer { translationY = y })
 }
 
 @Composable
@@ -329,25 +296,36 @@ fun SectionTitle(title: String, modifier: Modifier = Modifier, action: (@Composa
 }
 
 @Composable
-fun InfoChip(text: String, modifier: Modifier = Modifier, container: Color = MaterialTheme.colorScheme.surfaceVariant, content: Color = MaterialTheme.colorScheme.onSurface) {
-    Box(
+fun InfoChip(
+    text: String,
+    modifier: Modifier = Modifier,
+    container: Color = MaterialTheme.colorScheme.surfaceVariant,
+    content: Color = MaterialTheme.colorScheme.onSurface,
+    icon: ImageVector? = null,
+) {
+    Row(
         modifier
             .clip(RoundedCornerShape(50))
             .background(container)
             .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = content)
+        if (icon != null) {
+            Icon(icon, null, tint = content, modifier = Modifier.size(16.dp))
+            if (text.isNotEmpty()) Spacer(Modifier.width(6.dp))
+        }
+        if (text.isNotEmpty()) Text(text, style = MaterialTheme.typography.labelLarge, color = content)
     }
 }
 
 @Composable
-fun GlassChip(text: String, modifier: Modifier = Modifier) {
-    InfoChip(text, modifier, container = Color.Black.copy(alpha = 0.35f), content = Color.White)
+fun GlassChip(text: String, modifier: Modifier = Modifier, icon: ImageVector? = null) {
+    InfoChip(text, modifier, container = Color.Black.copy(alpha = 0.35f), content = Color.White, icon = icon)
 }
 
 @Composable
 fun EmptyState(
-    emoji: String,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
@@ -376,7 +354,7 @@ fun EmptyState(
                     )
                 },
             contentAlignment = Alignment.Center,
-        ) { FloatingEmoji(emoji, 64) }
+        ) { FloatingIcon(icon, 64.dp, MaterialTheme.colorScheme.primary) }
         Spacer(Modifier.height(12.dp))
         Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         Spacer(Modifier.height(6.dp))

@@ -9,7 +9,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddLocationAlt
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Luggage
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.*
@@ -163,7 +166,7 @@ fun HomeScreen(
         AnimatedVisibility(!ready, enter = fadeIn(), exit = fadeOut(tween(900))) {
             Box(Modifier.fillMaxSize().background(Color(0xFF02030A)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FloatingEmoji("🌍", 56)
+                    FloatingIcon(Icons.Rounded.Public, 56.dp, Color.White.copy(alpha = 0.85f))
                     Spacer(Modifier.height(12.dp))
                     Text("Preparo il tuo mondo…", color = Color.White.copy(alpha = 0.7f))
                 }
@@ -253,11 +256,11 @@ fun HomeScreen(
                                         Modifier.size(56.dp).clip(RoundedCornerShape(18.dp))
                                             .background(Brush.linearGradient(listOf(Sea, Forest))),
                                         contentAlignment = Alignment.Center,
-                                    ) { Text("🧳", fontSize = 26.sp) }
+                                    ) { Icon(Icons.Rounded.Luggage, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
                                     Spacer(Modifier.width(14.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text("DA VISITARE", color = PlannedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                                        Text("${countryFlag(d.country)} ${d.name}", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                                        Text(d.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             "${t.trip.name} · ${countdownLabel(t.trip.startDate, t.trip.endDate)}",
                                             color = Color.White.copy(alpha = 0.75f),
@@ -276,7 +279,7 @@ fun HomeScreen(
                                 Box(
                                     Modifier.size(52.dp).clip(CircleShape).background(BrandBrush),
                                     contentAlignment = Alignment.Center,
-                                ) { Text("📍", fontSize = 24.sp) }
+                                ) { Icon(Icons.Rounded.AddLocationAlt, null, tint = Color.White, modifier = Modifier.size(26.dp)) }
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("NUOVO RICORDO", color = VisitedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -284,7 +287,7 @@ fun HomeScreen(
                                         Text("Cerco il luogo…", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                     } else {
                                         Text(
-                                            "${countryFlag(s.loc.country)} ${s.loc.name}",
+                                            s.loc.name,
                                             color = Color.White, style = MaterialTheme.typography.titleMedium,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         )
@@ -380,14 +383,14 @@ private fun AlbumPreviewCard(
             CoverImage(
                 place.coverPath, place.id,
                 Modifier.size(78.dp).clip(RoundedCornerShape(20.dp)),
-                emoji = categoryEmoji(place.category), emojiSize = 30,
+                icon = categoryIcon(place.category), iconSize = 30.dp,
             )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 val route = p.route
                 Text(
-                    (if (route.size > 1) "🚐 ${route.first().name} → ${route.last().name} · ${route.size} tappe"
-                    else "${countryFlag(place.country)} ${place.locationName}").uppercase(),
+                    (if (route.size > 1) "${route.first().name} → ${route.last().name} · ${route.size} tappe"
+                    else place.locationName + countryCode(place.country).let { if (it.isNotEmpty()) " · $it" else "" }).uppercase(),
                     color = VisitedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )

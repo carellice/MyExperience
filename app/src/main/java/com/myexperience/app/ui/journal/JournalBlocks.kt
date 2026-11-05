@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.automirrored.rounded.StickyNote2
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -50,8 +54,8 @@ import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.Place
 import com.myexperience.app.data.PlaceStop
-import com.myexperience.app.ui.components.countryFlag
 import com.myexperience.app.ui.components.formatRange
+import com.myexperience.app.ui.components.stickerIcon
 import java.io.File
 import kotlin.math.acos
 import kotlin.math.cos
@@ -62,7 +66,7 @@ import kotlin.math.sin
 data class DiaryTheme(
     val id: String,
     val name: String,
-    val emoji: String,
+    val icon: ImageVector,
     val page: Color,
     val pageAlt: Color,
     val ink: Color,
@@ -74,15 +78,15 @@ data class DiaryTheme(
 )
 
 val DiaryThemes = listOf(
-    DiaryTheme("paper", "Carta", "📜", Color(0xFFF7EFDF), Color(0xFFEFE3C9), Color(0xFF3B2F2A), Color(0xFF7A6A5E), Color(0xFFC0583A), FontFamily.Serif, true, false),
-    DiaryTheme("night", "Notte", "🌙", Color(0xFF111633), Color(0xFF1B2050), Color(0xFFEDEBFF), Color(0xFFA9A8D8), Color(0xFFFFB86B), FontFamily.SansSerif, false, true),
-    DiaryTheme("ocean", "Oceano", "🌊", Color(0xFFE5F6FA), Color(0xFFCDEDF4), Color(0xFF0D3B4A), Color(0xFF4E7B88), Color(0xFF0A9396), FontFamily.SansSerif, false, false),
-    DiaryTheme("sunset", "Tramonto", "🌅", Color(0xFFFFEDE4), Color(0xFFFFD6DC), Color(0xFF5A2A3A), Color(0xFF8E5A68), Color(0xFFE85D75), FontFamily.Serif, false, false),
-    DiaryTheme("kraft", "Kraft", "📦", Color(0xFFD4B48C), Color(0xFFC6A276), Color(0xFF2E2118), Color(0xFF5A4532), Color(0xFF7A2E1A), FontFamily.Serif, true, false),
-    DiaryTheme("forest", "Foresta", "🌲", Color(0xFFE9F1E4), Color(0xFFD6E5CC), Color(0xFF1F3A26), Color(0xFF55705C), Color(0xFF3A7D44), FontFamily.Serif, false, false),
-    DiaryTheme("minimal", "Minimal", "⚪", Color(0xFFFFFFFF), Color(0xFFF3F3F6), Color(0xFF15142A), Color(0xFF6A6884), Color(0xFF1F6E80), FontFamily.SansSerif, false, false),
-    DiaryTheme("desert", "Deserto", "🏜️", Color(0xFFF6E7CF), Color(0xFFEBD3AE), Color(0xFF4A2E1C), Color(0xFF85644A), Color(0xFFB85C35), FontFamily.Serif, true, false),
-    DiaryTheme("alpine", "Montagna", "🏔️", Color(0xFFEEF1F2), Color(0xFFDCE3E6), Color(0xFF243039), Color(0xFF5E6E78), Color(0xFF3D6E8F), FontFamily.SansSerif, false, false),
+    DiaryTheme("paper", "Carta", Icons.Rounded.Description, Color(0xFFF7EFDF), Color(0xFFEFE3C9), Color(0xFF3B2F2A), Color(0xFF7A6A5E), Color(0xFFC0583A), FontFamily.Serif, true, false),
+    DiaryTheme("night", "Notte", Icons.Rounded.NightsStay, Color(0xFF111633), Color(0xFF1B2050), Color(0xFFEDEBFF), Color(0xFFA9A8D8), Color(0xFFFFB86B), FontFamily.SansSerif, false, true),
+    DiaryTheme("ocean", "Oceano", Icons.Rounded.Waves, Color(0xFFE5F6FA), Color(0xFFCDEDF4), Color(0xFF0D3B4A), Color(0xFF4E7B88), Color(0xFF0A9396), FontFamily.SansSerif, false, false),
+    DiaryTheme("sunset", "Tramonto", Icons.Rounded.WbTwilight, Color(0xFFFFEDE4), Color(0xFFFFD6DC), Color(0xFF5A2A3A), Color(0xFF8E5A68), Color(0xFFE85D75), FontFamily.Serif, false, false),
+    DiaryTheme("kraft", "Kraft", Icons.Rounded.Inventory2, Color(0xFFD4B48C), Color(0xFFC6A276), Color(0xFF2E2118), Color(0xFF5A4532), Color(0xFF7A2E1A), FontFamily.Serif, true, false),
+    DiaryTheme("forest", "Foresta", Icons.Rounded.Forest, Color(0xFFE9F1E4), Color(0xFFD6E5CC), Color(0xFF1F3A26), Color(0xFF55705C), Color(0xFF3A7D44), FontFamily.Serif, false, false),
+    DiaryTheme("minimal", "Minimal", Icons.Rounded.CropSquare, Color(0xFFFFFFFF), Color(0xFFF3F3F6), Color(0xFF15142A), Color(0xFF6A6884), Color(0xFF1F6E80), FontFamily.SansSerif, false, false),
+    DiaryTheme("desert", "Deserto", Icons.Rounded.WbSunny, Color(0xFFF6E7CF), Color(0xFFEBD3AE), Color(0xFF4A2E1C), Color(0xFF85644A), Color(0xFFB85C35), FontFamily.Serif, true, false),
+    DiaryTheme("alpine", "Montagna", Icons.Rounded.Landscape, Color(0xFFEEF1F2), Color(0xFFDCE3E6), Color(0xFF243039), Color(0xFF5E6E78), Color(0xFF3D6E8F), FontFamily.SansSerif, false, false),
 )
 
 fun themeById(id: String) = DiaryThemes.firstOrNull { it.id == id } ?: DiaryThemes[0]
@@ -126,25 +130,30 @@ private fun sizeFor(type: String, size: Int): Float {
         "HEADING" -> listOf(20f, 26f, 32f, 40f)[s]
         "QUOTE" -> listOf(15f, 18f, 21f, 25f)[s]
         "NOTE" -> listOf(15f, 18f, 21f, 25f)[s]
-        "STICKER" -> listOf(30f, 42f, 56f, 72f)[s]
+        "STICKER" -> listOf(26f, 36f, 48f, 62f)[s]
         else -> listOf(14f, 16f, 19f, 23f)[s]
     }
 }
 
-data class BlockType(val type: String, val emoji: String, val label: String, val hint: String)
+data class BlockType(val type: String, val icon: ImageVector, val label: String, val hint: String)
 
 val BlockTypes = listOf(
-    BlockType("HEADING", "🅰️", "Titolo", "Un titolo grande"),
-    BlockType("TEXT", "📝", "Testo", "Racconta liberamente"),
-    BlockType("QUOTE", "❝", "Citazione", "Una frase da ricordare"),
-    BlockType("NOTE", "🗒️", "Nota adesiva", "Post-it scritto a mano"),
-    BlockType("LIST", "✦", "Elenco", "Momenti, tappe, cibi…"),
-    BlockType("PHOTO", "🖼️", "Foto / video", "Polaroid o foto grande"),
-    BlockType("GALLERY", "🧩", "Collage", "Più foto insieme"),
-    BlockType("STICKER", "😍", "Sticker", "Emoji decorative"),
-    BlockType("STAMP", "📮", "Timbro", "Luogo e data"),
-    BlockType("DIVIDER", "✂️", "Separatore", "Dividi le sezioni"),
-    BlockType("ROUTE", "🧭", "Percorso", "Le tappe del viaggio"),
+    BlockType("HEADING", Icons.Rounded.Title, "Titolo", "Un titolo grande"),
+    BlockType("TEXT", Icons.Rounded.Notes, "Testo", "Racconta liberamente"),
+    BlockType("QUOTE", Icons.Rounded.FormatQuote, "Citazione", "Una frase da ricordare"),
+    BlockType("NOTE", Icons.Rounded.StickyNote2, "Nota adesiva", "Post-it scritto a mano"),
+    BlockType("LIST", Icons.Rounded.FormatListBulleted, "Elenco", "Momenti, tappe, cibi…"),
+    BlockType("PHOTO", Icons.Rounded.Image, "Foto / video", "Polaroid o foto grande"),
+    BlockType("GALLERY", Icons.Rounded.Collections, "Collage", "Più foto insieme"),
+    BlockType("STICKER", Icons.Rounded.Interests, "Icone", "Decorazioni a tema viaggio"),
+    BlockType("STAMP", Icons.Rounded.Approval, "Timbro", "Luogo e data"),
+    BlockType("DIVIDER", Icons.Rounded.HorizontalRule, "Separatore", "Dividi le sezioni"),
+    BlockType("ROUTE", Icons.Rounded.Route, "Percorso", "Le tappe del viaggio"),
+)
+
+/** Colori a rotazione per le icone decorative e i segnaposto: terracotta, mare, foresta, sabbia, roccia. */
+val AccentCycle = listOf(
+    Color(0xFFC8553D), Color(0xFF2A7FA8), Color(0xFF4E9A4A), Color(0xFFDDA033), Color(0xFF5E6E78),
 )
 
 // ------------------------------------------------------------------ pagina
@@ -248,7 +257,10 @@ fun JournalBlockView(
                 block.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("Primo momento", "Secondo momento") }
                     .forEach { line ->
                         Row(verticalAlignment = Alignment.Top) {
-                            Text("✦", color = theme.accent, fontSize = fs.sp, modifier = Modifier.padding(end = 10.dp))
+                            Box(
+                                Modifier.padding(top = (fs * 0.55f).dp, end = 12.dp).size(7.dp)
+                                    .rotate(45f).background(theme.accent, RoundedCornerShape(1.5.dp)),
+                            )
                             Text(line, color = ink, fontFamily = font, fontSize = fs.sp, lineHeight = (fs * 1.4f).sp)
                         }
                     }
@@ -305,15 +317,28 @@ fun JournalBlockView(
             "STICKER" -> {
                 val inf = rememberInfiniteTransition(label = "sticker")
                 val y by inf.animateFloat(-4f, 4f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "y")
-                Text(
-                    block.text.ifBlank { "✨" }, fontSize = fs.sp, textAlign = align, lineHeight = (fs * 1.2f).sp,
-                    modifier = Modifier.fillMaxWidth().graphicsLayer { translationY = y },
-                )
+                val icons = block.text.split(' ').mapNotNull { stickerIcon(it.trim()) }.ifEmpty { listOf(Icons.Rounded.AutoAwesome) }
+                Row(
+                    Modifier.fillMaxWidth().graphicsLayer { translationY = y },
+                    horizontalArrangement = when (block.align) {
+                        "center" -> Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally)
+                        "end" -> Arrangement.spacedBy(14.dp, Alignment.End)
+                        else -> Arrangement.spacedBy(14.dp)
+                    },
+                ) {
+                    icons.forEachIndexed { i, ic ->
+                        val c = if (block.color != 0) ink else AccentCycle[i % AccentCycle.size]
+                        Box(
+                            Modifier.size((fs * 1.5f).dp).clip(CircleShape).background(c.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(ic, null, tint = c, modifier = Modifier.size(fs.dp)) }
+                    }
+                }
             }
 
             "STAMP" -> {
                 val label = block.text.ifBlank {
-                    "${countryFlag(place.country)} ${place.locationName.uppercase()}" +
+                    place.locationName.uppercase() +
                         (if (place.country.isNotBlank()) " · ${place.country.uppercase()}" else "")
                 }
                 Box(Modifier.fillMaxWidth(), contentAlignment = when (block.align) {
@@ -349,8 +374,14 @@ fun JournalBlockView(
                         )
                     },
                 )
-                "stars" -> Text("✦   ✦   ✦", color = theme.accent, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                else -> Text("· · · · · ✈ · · · · ·", color = theme.soft, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                "stars" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally)) {
+                    repeat(3) { Icon(Icons.Rounded.AutoAwesome, null, tint = theme.accent, modifier = Modifier.size(18.dp)) }
+                }
+                else -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Text("· · · · ·", color = theme.soft, fontSize = 18.sp)
+                    Icon(Icons.Rounded.Flight, null, tint = theme.soft, modifier = Modifier.padding(horizontal = 8.dp).size(20.dp).rotate(90f))
+                    Text("· · · · ·", color = theme.soft, fontSize = 18.sp)
+                }
             }
 
             "ROUTE" -> RouteView(stops, theme, dashed = block.style == "dashed")
@@ -377,7 +408,11 @@ private fun MediaThumb(m: AlbumMedia?, modifier: Modifier, onOpen: (AlbumMedia) 
                 ) { Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp)) }
             }
         } else {
-            Text("🖼️  Scegli una foto", color = Color.Gray, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Image, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Scegli una foto", color = Color.Gray, fontSize = 13.sp)
+            }
         }
     }
 }
@@ -420,10 +455,7 @@ private fun Collage(items: List<AlbumMedia>, onOpen: (AlbumMedia) -> Unit) {
     }
 }
 
-/** Colori dei segnaposto del percorso, a rotazione: terracotta, mare, foresta, sabbia, roccia. */
-private val RoutePinColors = listOf(
-    Color(0xFFC8553D), Color(0xFF2A7FA8), Color(0xFF4E9A4A), Color(0xFFDDA033), Color(0xFF5E6E78),
-)
+private val RoutePinColors = AccentCycle
 
 /**
  * Percorso del viaggio disegnato a mano: un segnaposto per tappa, alternati a sinistra e a destra,
@@ -433,7 +465,7 @@ private val RoutePinColors = listOf(
 private fun RouteView(stops: List<PlaceStop>, theme: DiaryTheme, dashed: Boolean) {
     if (stops.isEmpty()) {
         Text(
-            "🧭 Aggiungi le tappe dell'album per vedere il percorso",
+            "Aggiungi le tappe dell'album per vedere il percorso",
             color = theme.soft, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
         return
@@ -523,7 +555,7 @@ private fun RouteView(stops: List<PlaceStop>, theme: DiaryTheme, dashed: Boolean
             val s = stops[i]
             val label = buildString {
                 append(s.name)
-                if (s.nights > 0) append("\n🌙 ${s.nights} ${if (s.nights == 1) "notte" else "notti"}")
+                if (s.nights > 0) append("\n${s.nights} ${if (s.nights == 1) "notte" else "notti"}")
             }
             val layout = measurer.measure(
                 label,

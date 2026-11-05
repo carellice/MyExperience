@@ -5,6 +5,9 @@ import android.location.Address
 import android.location.Geocoder
 import android.net.Uri
 import android.webkit.MimeTypeMap
+import com.myexperience.app.ui.components.LegacyStickerKeys
+import com.myexperience.app.ui.components.moodSticker
+import com.myexperience.app.ui.components.stickerIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -95,6 +98,25 @@ class Repository(private val context: Context, db: AppDatabase) {
         prefs.edit().putBoolean("routes_v13", true).apply()
     }
 
+    /** Una tantum (v1.4): gli sticker emoji del diario diventano icone, il testo d'esempio perde l'emoji. */
+    suspend fun convertEmojiStickers() {
+        if (prefs.getBoolean("icons_v14", false)) return
+        val changed = placeDao.allBlocks().mapNotNull { b ->
+            when (b.type) {
+                "STICKER" -> {
+                    val tokens = b.text.split(' ').map { it.trim() }.filter { it.isNotEmpty() }
+                    if (tokens.all { stickerIcon(it) != null }) null
+                    else b.copy(text = tokens.mapNotNull { t -> if (stickerIcon(t) != null) t else LegacyStickerKeys[t] }
+                        .ifEmpty { listOf("sparkle") }.joinToString(" "))
+                }
+                "TEXT" -> if ("Tocca ✏️ Personalizza" in b.text) b.copy(text = b.text.replace("✏️ ", "")) else null
+                else -> null
+            }
+        }
+        if (changed.isNotEmpty()) placeDao.updateBlocks(changed)
+        prefs.edit().putBoolean("icons_v14", true).apply()
+    }
+
     suspend fun deletePlace(place: Place) = withContext(Dispatchers.IO) {
         val paths = placeDao.mediaFor(place.id).map { it.path }.toMutableSet()
         place.coverPath?.let { paths += it }
@@ -177,12 +199,12 @@ class Repository(private val context: Context, db: AppDatabase) {
         }
         add("STAMP", align = "end")
         add("HEADING", place.title, size = 3, align = "center")
-        add("STICKER", listOf(place.mood, "✈️", "📍").joinToString(" "), size = 1, align = "center")
+        add("STICKER", listOf(moodSticker(place.mood), "plane", "pin").joinToString(" "), size = 1, align = "center")
         add(
             "TEXT",
             place.description.ifBlank {
                 "Scrivi qui il racconto di questa esperienza: cosa hai visto, chi hai incontrato, " +
-                    "cosa ti porterai dietro. Tocca ✏️ Personalizza per modificare tutto."
+                    "cosa ti porterai dietro. Tocca Personalizza per modificare tutto."
             },
         )
         val stops = placeDao.stopsFor(placeId)
@@ -330,7 +352,7 @@ class Repository(private val context: Context, db: AppDatabase) {
     // ---------- Profilo ----------
     fun loadProfile() = Profile(
         name = prefs.getString("name", null) ?: "Viaggiatore",
-        bio = prefs.getString("bio", null) ?: "Collezionista di tramonti e biglietti di sola andata ✈️",
+        bio = prefs.getString("bio", null) ?: "Collezionista di tramonti e biglietti di sola andata",
         avatarPath = prefs.getString("avatar", null),
     )
 

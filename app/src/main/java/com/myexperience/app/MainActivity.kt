@@ -44,7 +44,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.myexperience.app.ui.components.FloatingEmoji
+import com.myexperience.app.ui.components.FloatingIcon
 import com.myexperience.app.ui.components.bounceClick
 import com.myexperience.app.ui.screens.*
 import com.myexperience.app.ui.theme.BrandBrush
@@ -353,7 +353,7 @@ private fun Splash() {
                 alpha = enter.value.coerceIn(0f, 1f)
             },
         ) {
-            FloatingEmoji("🌍", 84)
+            FloatingIcon(Icons.Rounded.Public, 84.dp, Color.White)
             Spacer(Modifier.height(16.dp))
             Text("MyExperience", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(6.dp))
