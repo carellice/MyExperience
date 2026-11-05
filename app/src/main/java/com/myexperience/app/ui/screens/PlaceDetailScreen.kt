@@ -267,7 +267,7 @@ fun PlaceDetailScreen(
                                 .combinedClickable(onClick = { editing = EditRequest(block, i) })
                                 .padding(12.dp),
                         ) {
-                            JournalBlockView(block, theme, p, mediaById, onOpenMedia = { editing = EditRequest(block, i) })
+                            JournalBlockView(block, theme, p, mediaById, onOpenMedia = { editing = EditRequest(block, i) }, stops = route)
                             Spacer(Modifier.height(8.dp))
                             BlockToolbar(
                                 theme = theme,
@@ -282,7 +282,7 @@ fun PlaceDetailScreen(
                         }
                         InsertHere(theme) { paletteAt = i + 1 }
                     } else {
-                        JournalBlockView(block, theme, p, mediaById, onOpenMedia = openMedia, modifier = Modifier.appear(i.coerceAtMost(4)))
+                        JournalBlockView(block, theme, p, mediaById, onOpenMedia = openMedia, modifier = Modifier.appear(i.coerceAtMost(4)), stops = route)
                     }
                 }
             }
@@ -450,7 +450,7 @@ fun PlaceDetailScreen(
                 "DIVIDER" -> JournalBlock(placeId = p.id, type = type, style = "plane")
                 else -> JournalBlock(placeId = p.id, type = type)
             }
-            if (type == "DIVIDER") vm.saveBlock(defaults, at) else editing = EditRequest(defaults, at)
+            if (type == "DIVIDER" || type == "ROUTE") vm.saveBlock(defaults, at) else editing = EditRequest(defaults, at)
         }
     }
 
@@ -469,6 +469,7 @@ fun PlaceDetailScreen(
                 vm.saveBlock(b, req.index)
                 editing = null
             },
+            stops = route,
         )
     }
 

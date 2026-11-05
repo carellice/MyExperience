@@ -1,6 +1,7 @@
 package com.myexperience.app.ui.journal
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,12 +21,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -36,9 +49,13 @@ import coil.compose.AsyncImage
 import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.Place
+import com.myexperience.app.data.PlaceStop
 import com.myexperience.app.ui.components.countryFlag
 import com.myexperience.app.ui.components.formatRange
 import java.io.File
+import kotlin.math.acos
+import kotlin.math.cos
+import kotlin.math.sin
 
 // ------------------------------------------------------------------ temi
 
@@ -127,6 +144,7 @@ val BlockTypes = listOf(
     BlockType("STICKER", "😍", "Sticker", "Emoji decorative"),
     BlockType("STAMP", "📮", "Timbro", "Luogo e data"),
     BlockType("DIVIDER", "✂️", "Separatore", "Dividi le sezioni"),
+    BlockType("ROUTE", "🧭", "Percorso", "Le tappe del viaggio"),
 )
 
 // ------------------------------------------------------------------ pagina
@@ -156,6 +174,7 @@ fun JournalBlockView(
     mediaById: Map<Long, AlbumMedia>,
     onOpenMedia: (AlbumMedia) -> Unit,
     modifier: Modifier = Modifier,
+    stops: List<PlaceStop> = emptyList(),
 ) {
     val ink = inkFor(block, theme)
     val font = fontFor(block.font, theme)
@@ -334,6 +353,8 @@ fun JournalBlockView(
                 else -> Text("· · · · · ✈ · · · · ·", color = theme.soft, fontSize = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
 
+            "ROUTE" -> RouteView(stops, theme, dashed = block.style == "dashed")
+
             else -> Text(block.text, color = ink)
         }
     }
@@ -395,6 +416,131 @@ private fun Collage(items: List<AlbumMedia>, onOpen: (AlbumMedia) -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Colori dei segnaposto del percorso, a rotazione: terracotta, mare, foresta, sabbia, roccia. */
+private val RoutePinColors = listOf(
+    Color(0xFFC8553D), Color(0xFF2A7FA8), Color(0xFF4E9A4A), Color(0xFFDDA033), Color(0xFF5E6E78),
+)
+
+/**
+ * Percorso del viaggio disegnato a mano: un segnaposto per tappa, alternati a sinistra e a destra,
+ * uniti da una linea morbida (curve di Bézier che partono e arrivano in orizzontale).
+ */
+@Composable
+private fun RouteView(stops: List<PlaceStop>, theme: DiaryTheme, dashed: Boolean) {
+    if (stops.isEmpty()) {
+        Text(
+            "🧭 Aggiungi le tappe dell'album per vedere il percorso",
+            color = theme.soft, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+        )
+        return
+    }
+    val measurer = rememberTextMeasurer()
+    val draw = remember { Animatable(0f) }
+    LaunchedEffect(stops.size) { draw.animateTo(1f, tween(1400, easing = FastOutSlowInEasing)) }
+    val rowH = 104.dp
+    val top = 46.dp
+    val bottom = 58.dp
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(top + rowH * (stops.size - 1) + bottom),
+    ) {
+        val r = 14.dp.toPx()
+        val labelW = size.width * 0.46f
+        val tips = stops.indices.map { i ->
+            val x = when {
+                stops.size == 1 -> size.width / 2
+                i % 2 == 0 -> size.width * 0.22f
+                else -> size.width * 0.78f
+            }
+            Offset(x, top.toPx() + i * rowH.toPx())
+        }
+
+        // linea del percorso, tracciata progressivamente
+        if (tips.size > 1) {
+            // spline di Catmull-Rom: nelle tappe intermedie la curva gira senza spigoli,
+            // agli estremi parte e arriva in orizzontale
+            val n = tips.size
+            val tangents = tips.indices.map { i ->
+                when (i) {
+                    0 -> Offset((tips[1].x - tips[0].x) * 1.1f, 0f)
+                    n - 1 -> Offset((tips[i].x - tips[i - 1].x) * 1.1f, 0f)
+                    else -> (tips[i + 1] - tips[i - 1]) * 0.8f
+                }
+            }
+            val path = Path().apply {
+                moveTo(tips[0].x, tips[0].y)
+                for (i in 1 until n) {
+                    val c1 = tips[i - 1] + tangents[i - 1] / 3f
+                    val c2 = tips[i] - tangents[i] / 3f
+                    cubicTo(c1.x, c1.y, c2.x, c2.y, tips[i].x, tips[i].y)
+                }
+            }
+            val segment = Path()
+            PathMeasure().apply {
+                setPath(path, false)
+                getSegment(0f, length * draw.value, segment, true)
+            }
+            val stroke = Stroke(
+                width = 4.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(18f, 16f)) else null,
+            )
+            drawPath(segment, theme.ink.copy(alpha = 0.12f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(segment, theme.ink.copy(alpha = 0.85f), style = stroke)
+        }
+
+        tips.forEachIndexed { i, tip ->
+            val color = RoutePinColors[i % RoutePinColors.size]
+            // ombra a terra
+            drawOval(
+                Color.Black.copy(alpha = 0.16f),
+                topLeft = Offset(tip.x - r * 1.3f, tip.y - r * 0.28f),
+                size = Size(r * 2.6f, r * 0.56f),
+            )
+            // goccia: testa circolare + punta, raccordate con le tangenti
+            val c = Offset(tip.x, tip.y - r * 2.1f)
+            val d = tip.y - c.y
+            val phi = Math.toDegrees(acos((r / d).toDouble())).toFloat()
+            val pin = Path().apply {
+                moveTo(tip.x, tip.y)
+                val a0 = Math.toRadians((90f - phi).toDouble())
+                lineTo(c.x + r * cos(a0).toFloat(), c.y + r * sin(a0).toFloat())
+                arcTo(Rect(c, r), 90f - phi, -(360f - 2 * phi), false)
+                close()
+            }
+            drawPath(pin, color)
+            drawCircle(Color.White, r * 0.55f, c)
+            val num = measurer.measure(
+                "${i + 1}", TextStyle(color = color, fontSize = 11.sp, fontWeight = FontWeight.Black),
+            )
+            drawText(num, topLeft = Offset(c.x - num.size.width / 2f, c.y - num.size.height / 2f))
+
+            // etichetta sotto il segnaposto, su "cartellino" del colore della pagina
+            val s = stops[i]
+            val label = buildString {
+                append(s.name)
+                if (s.nights > 0) append("\n🌙 ${s.nights} ${if (s.nights == 1) "notte" else "notti"}")
+            }
+            val layout = measurer.measure(
+                label,
+                TextStyle(color = theme.ink, fontFamily = theme.font, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center),
+                constraints = Constraints(maxWidth = labelW.toInt()),
+                maxLines = 3,
+            )
+            val pad = 6.dp.toPx()
+            val lx = (tip.x - layout.size.width / 2f).coerceIn(pad, size.width - layout.size.width - pad)
+            val ly = tip.y + 8.dp.toPx()
+            drawRoundRect(
+                theme.page.copy(alpha = 0.92f),
+                topLeft = Offset(lx - pad, ly - pad / 2),
+                size = Size(layout.size.width + pad * 2, layout.size.height + pad),
+                cornerRadius = CornerRadius(10.dp.toPx()),
+            )
+            drawText(layout, topLeft = Offset(lx, ly))
         }
     }
 }

@@ -61,10 +61,38 @@ class Repository(private val context: Context, db: AppDatabase) {
             p.id
         }
         if (stops.isNotEmpty()) {
+            val before = if (place.id == 0L) 0 else placeDao.stopsFor(id).size
             placeDao.deleteStops(id)
             placeDao.insertStops(stops.mapIndexed { i, s -> s.copy(id = 0, placeId = id, orderIndex = i) })
+            // l'album è appena diventato "a tappe": il diario riceve il disegno del percorso
+            if (before <= 1 && stops.size > 1) addRouteBlock(id)
         }
         return id
+    }
+
+    /** Inserisce il percorso nel diario (dopo il primo testo) se non c'è già. */
+    private suspend fun addRouteBlock(placeId: Long) {
+        val blocks = placeDao.blocksFor(placeId)
+        if (blocks.isEmpty() || blocks.any { it.type == "ROUTE" }) return
+        val at = blocks.indexOfFirst { it.type == "TEXT" }.let { if (it < 0) blocks.size else it + 1 }
+        saveBlock(JournalBlock(placeId = placeId, type = "ROUTE"), at)
+    }
+
+    /**
+     * Una tantum (v1.3): gli album a tappe creati prima ricevono il percorso nel diario.
+     * L'elenco "Le tappe del viaggio" generato in automatico viene sostituito dal disegno.
+     */
+    suspend fun addMissingRoutes() {
+        if (prefs.getBoolean("routes_v13", false)) return
+        placeDao.placesWithManyStops().forEach { placeId ->
+            val blocks = placeDao.blocksFor(placeId)
+            if (blocks.any { it.type == "ROUTE" }) return@forEach
+            val i = blocks.indexOfFirst { it.type == "HEADING" && it.text == "Le tappe del viaggio" }
+            val list = blocks.getOrNull(i + 1)?.takeIf { i >= 0 && it.type == "LIST" }
+            if (list != null) placeDao.updateBlocks(listOf(list.copy(type = "ROUTE", text = "")))
+            else addRouteBlock(placeId)
+        }
+        prefs.edit().putBoolean("routes_v13", true).apply()
     }
 
     suspend fun deletePlace(place: Place) = withContext(Dispatchers.IO) {
@@ -160,9 +188,7 @@ class Repository(private val context: Context, db: AppDatabase) {
         val stops = placeDao.stopsFor(placeId)
         if (stops.size > 1) {
             add("HEADING", "Le tappe del viaggio", size = 1, font = "cursive")
-            add("LIST", stops.joinToString("\n") { s ->
-                s.name + if (s.nights > 0) " · ${s.nights} ${if (s.nights == 1) "notte" else "notti"}" else ""
-            })
+            add("ROUTE")
         }
         images.firstOrNull()?.let { add("PHOTO", place.locationName, it.id.toString(), style = "polaroid") }
         if (images.size > 1) {

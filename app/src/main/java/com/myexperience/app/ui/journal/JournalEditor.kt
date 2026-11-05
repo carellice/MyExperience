@@ -29,6 +29,7 @@ import coil.compose.AsyncImage
 import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.Place
+import com.myexperience.app.data.PlaceStop
 import com.myexperience.app.ui.components.GradientButton
 import com.myexperience.app.ui.components.appTextFieldColors
 import com.myexperience.app.ui.components.bounceClick
@@ -56,6 +57,7 @@ fun BlockEditorSheet(
     onImport: (multiple: Boolean, onIds: (List<Long>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
     onSave: (JournalBlock) -> Unit,
+    stops: List<PlaceStop> = emptyList(),
 ) {
     var draft by remember(initial.id, initial.type) { mutableStateOf(initial) }
     val mediaById = remember(media) { media.associateBy { it.id } }
@@ -85,7 +87,7 @@ fun BlockEditorSheet(
                     .padding(18.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                JournalBlockView(draft, theme, place, mediaById, onOpenMedia = {})
+                JournalBlockView(draft, theme, place, mediaById, onOpenMedia = {}, stops = stops)
             }
 
             // testo
@@ -268,6 +270,18 @@ fun BlockEditorSheet(
                     SelectChip("✦ Stelle", draft.style == "stars") { draft = draft.copy(style = "stars") }
                     SelectChip("– – Linea", draft.style == "line") { draft = draft.copy(style = "line") }
                 }
+            }
+            if (draft.type == "ROUTE") {
+                Label("Linea del percorso")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SelectChip("〰 Continua", draft.style != "dashed") { draft = draft.copy(style = "") }
+                    SelectChip("┄ Tratteggiata", draft.style == "dashed") { draft = draft.copy(style = "dashed") }
+                }
+                Text(
+                    "Le tappe si modificano da ⋮ › Dati dell'esperienza.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Spacer(Modifier.height(4.dp))

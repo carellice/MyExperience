@@ -64,6 +64,9 @@ interface PlaceDao {
     @Insert
     suspend fun insertStops(stops: List<PlaceStop>)
 
+    @Query("SELECT placeId FROM place_stops GROUP BY placeId HAVING COUNT(*) > 1")
+    suspend fun placesWithManyStops(): List<Long>
+
     // ---- diario ----
     @Query("SELECT * FROM journal_blocks WHERE placeId = :placeId ORDER BY orderIndex, id")
     fun observeBlocks(placeId: Long): Flow<List<JournalBlock>>

@@ -41,6 +41,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _importing = MutableStateFlow(false)
     val importing: StateFlow<Boolean> = _importing.asStateFlow()
 
+    init {
+        viewModelScope.launch { repo.addMissingRoutes() }
+    }
+
     fun place(id: Long): Flow<PlaceWithMedia?> = repo.place(id)
     fun trip(id: Long): Flow<TripWithDetails?> = repo.trip(id)
 
