@@ -323,6 +323,21 @@ fun GlassChip(text: String, modifier: Modifier = Modifier, icon: ImageVector? = 
     InfoChip(text, modifier, container = Color.Black.copy(alpha = 0.35f), content = Color.White, icon = icon)
 }
 
+/** Bandiere dei paesi in una pillola scura, ben distanziate tra loro. */
+@Composable
+fun FlagsChip(flags: List<String>, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.35f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        flags.forEach { Text(it, fontSize = 15.sp) }
+    }
+}
+
 @Composable
 fun EmptyState(
     icon: ImageVector,

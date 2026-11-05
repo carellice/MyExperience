@@ -145,7 +145,7 @@ fun PlaceDetailScreen(
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 22.dp, vertical = 18.dp).appear()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             if (route.size > 1) {
-                                val flags = d.countries.joinToString("") { countryFlag(it) }
+                                val flags = d.countries.map { countryFlag(it) }.filter { it.isNotEmpty() }.joinToString("  ")
                                 GlassChip(
                                     "${route.size} tappe" + if (flags.isNotEmpty()) " · $flags" else "",
                                     icon = Icons.Rounded.Route,

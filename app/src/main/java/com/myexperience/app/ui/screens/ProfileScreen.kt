@@ -336,8 +336,8 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                 ),
             )
             Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                val flags = p.countries.ifEmpty { listOf(place.country) }.take(4).joinToString("") { countryFlag(it) }
-                if (flags.isNotEmpty()) GlassChip(flags)
+                val flags = p.countries.ifEmpty { listOf(place.country) }.map { countryFlag(it) }.filter { it.isNotEmpty() }.take(4)
+                if (flags.isNotEmpty()) FlagsChip(flags)
                 if (place.favorite) {
                     Box(
                         Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)),
