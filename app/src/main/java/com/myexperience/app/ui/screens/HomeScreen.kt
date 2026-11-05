@@ -39,8 +39,14 @@ import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.globe.GlobeMarker
 import com.myexperience.app.ui.globe.GlobeView
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Pink
+import com.myexperience.app.ui.theme.Forest
+import com.myexperience.app.ui.theme.Sea
+import com.myexperience.app.ui.theme.Terracotta
 import kotlinx.coroutines.launch
+
+/** Colori dei punti sul globo (allineati a GlobeView). */
+private val VisitedColor = Color(0xFFF0A26B)
+private val PlannedColor = Color(0xFF8FD3DE)
 
 private sealed interface GlobeSelection {
     data class Album(val placeId: Long) : GlobeSelection
@@ -82,7 +88,8 @@ fun HomeScreen(
     val placeList = places.orEmpty()
     val markers = remember(places, trips, selection) {
         val list = mutableListOf<GlobeMarker>()
-        placeList.forEach { list += GlobeMarker(it.place.id, it.place.latitude, it.place.longitude, 0) }
+        // un punto per ogni tappa: le tappe di un album on the road si illuminano insieme
+        placeList.forEach { p -> p.route.forEach { s -> list += GlobeMarker(p.place.id, s.latitude, s.longitude, 0) } }
         trips.orEmpty().forEach { t ->
             t.destinations.filter { !it.visited }.forEach { d ->
                 list += GlobeMarker(-d.id, d.latitude, d.longitude, 1)
@@ -164,7 +171,7 @@ fun HomeScreen(
         }
 
         // intestazione
-        val countries = placeList.map { it.place.country }.filter { it.isNotBlank() }.distinct().size
+        val countries = placeList.flatMap { it.countries }.distinct().size
         Column(
             Modifier
                 .fillMaxWidth()
@@ -184,9 +191,9 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LegendDot(Color(0xFFFF4D85), "Visitati")
+                LegendDot(VisitedColor, "Visitati")
                 if (trips.orEmpty().any { t -> t.destinations.any { !it.visited } }) {
-                    LegendDot(Color(0xFF33D9F2), "Da visitare")
+                    LegendDot(PlannedColor, "Da visitare")
                 }
             }
         }
@@ -244,12 +251,12 @@ fun HomeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         Modifier.size(56.dp).clip(RoundedCornerShape(18.dp))
-                                            .background(Brush.linearGradient(listOf(Color(0xFF22C1C3), Color(0xFF7B5CFF)))),
+                                            .background(Brush.linearGradient(listOf(Sea, Forest))),
                                         contentAlignment = Alignment.Center,
                                     ) { Text("🧳", fontSize = 26.sp) }
                                     Spacer(Modifier.width(14.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text("DA VISITARE", color = Color(0xFF33D9F2), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                        Text("DA VISITARE", color = PlannedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                         Text("${countryFlag(d.country)} ${d.name}", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                         Text(
                                             "${t.trip.name} · ${countdownLabel(t.trip.startDate, t.trip.endDate)}",
@@ -272,7 +279,7 @@ fun HomeScreen(
                                 ) { Text("📍", fontSize = 24.sp) }
                                 Spacer(Modifier.width(14.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text("NUOVO RICORDO", color = Pink, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                                    Text("NUOVO RICORDO", color = VisitedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                                     if (s.resolving) {
                                         Text("Cerco il luogo…", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                     } else {
@@ -354,7 +361,7 @@ private fun GlassPanel(onClick: (() -> Unit)? = null, content: @Composable () ->
             .fillMaxWidth()
             .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black, spotColor = Color.Black)
             .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xE6151726))
+            .background(Color(0xE6121B1E))
             .then(if (onClick != null) Modifier.bounceClick(onClick = onClick) else Modifier)
             .padding(14.dp),
     ) { content() }
@@ -377,9 +384,11 @@ private fun AlbumPreviewCard(
             )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
+                val route = p.route
                 Text(
-                    "${countryFlag(place.country)} ${place.locationName}".uppercase(),
-                    color = Color(0xFFFF4D85), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+                    (if (route.size > 1) "🚐 ${route.first().name} → ${route.last().name} · ${route.size} tappe"
+                    else "${countryFlag(place.country)} ${place.locationName}").uppercase(),
+                    color = VisitedColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(
@@ -422,7 +431,7 @@ fun LikeButton(liked: Boolean, onClick: () -> Unit, tintOff: Color = MaterialThe
     Icon(
         if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
         contentDescription = "Preferito",
-        tint = if (liked) Pink else tintOff,
+        tint = if (liked) Terracotta else tintOff,
         modifier = Modifier
             .size(26.dp)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }

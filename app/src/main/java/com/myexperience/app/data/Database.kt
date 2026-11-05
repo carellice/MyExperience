@@ -54,6 +54,16 @@ interface PlaceDao {
     @Query("SELECT * FROM album_media WHERE placeId = :placeId")
     suspend fun mediaFor(placeId: Long): List<AlbumMedia>
 
+    // ---- tappe ----
+    @Query("SELECT * FROM place_stops WHERE placeId = :placeId ORDER BY orderIndex, id")
+    suspend fun stopsFor(placeId: Long): List<PlaceStop>
+
+    @Query("DELETE FROM place_stops WHERE placeId = :placeId")
+    suspend fun deleteStops(placeId: Long)
+
+    @Insert
+    suspend fun insertStops(stops: List<PlaceStop>)
+
     // ---- diario ----
     @Query("SELECT * FROM journal_blocks WHERE placeId = :placeId ORDER BY orderIndex, id")
     fun observeBlocks(placeId: Long): Flow<List<JournalBlock>>
@@ -83,6 +93,14 @@ interface TripDao {
 
     @Query("SELECT * FROM trips WHERE id = :id")
     suspend fun get(id: Long): PlannedTrip?
+
+    @Transaction
+    @Query("SELECT * FROM trips WHERE id = :id")
+    suspend fun getWithDetails(id: Long): TripWithDetails?
+
+    /** Viaggi con date già passate (fine, o inizio se manca la fine, prima di [today]). */
+    @Query("SELECT id FROM trips WHERE COALESCE(endDate, startDate) < :today")
+    suspend fun endedBefore(today: Long): List<Long>
 
     @Insert
     suspend fun insert(trip: PlannedTrip): Long
@@ -141,12 +159,36 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/** v2 -> v3: tappe degli album (viaggi on the road). Ogni album esistente riceve la sua tappa unica. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `place_stops` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`placeId` INTEGER NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`country` TEXT NOT NULL, " +
+                "`latitude` REAL NOT NULL, " +
+                "`longitude` REAL NOT NULL, " +
+                "`orderIndex` INTEGER NOT NULL, " +
+                "`nights` INTEGER NOT NULL, " +
+                "`notes` TEXT NOT NULL, " +
+                "FOREIGN KEY(`placeId`) REFERENCES `places`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_place_stops_placeId` ON `place_stops` (`placeId`)")
+        db.execSQL(
+            "INSERT INTO `place_stops` (`placeId`, `name`, `country`, `latitude`, `longitude`, `orderIndex`, `nights`, `notes`) " +
+                "SELECT `id`, `locationName`, `country`, `latitude`, `longitude`, 0, 0, '' FROM `places`"
+        )
+    }
+}
+
 @Database(
     entities = [
         Place::class, AlbumMedia::class, PlannedTrip::class, TripDestination::class,
-        TripTask::class, JournalBlock::class,
+        TripTask::class, JournalBlock::class, PlaceStop::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -156,7 +198,7 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "myexperience.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

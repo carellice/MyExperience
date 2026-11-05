@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.myexperience.app.ui.theme.Pink
+import com.myexperience.app.ui.theme.Sea
 import kotlinx.coroutines.launch
 
 /** Dialog globale che segue lo stato di [AppUpdater]: nuova versione, download, installazione. */
@@ -39,7 +39,7 @@ fun UpdateDialog() {
     when (val s = state) {
         is UpdateState.Available -> AlertDialog(
             onDismissRequest = { AppUpdater.dismiss() },
-            icon = { Icon(Icons.Rounded.SystemUpdate, null, tint = Pink) },
+            icon = { Icon(Icons.Rounded.SystemUpdate, null, tint = Sea) },
             title = { Text("Nuova versione ${s.release.version}") },
             text = {
                 Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {

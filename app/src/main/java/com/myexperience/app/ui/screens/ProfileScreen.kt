@@ -41,9 +41,10 @@ import com.myexperience.app.data.PlaceWithMedia
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.journal.themeById
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Coral
-import com.myexperience.app.ui.theme.Pink
-import com.myexperience.app.ui.theme.Violet
+import com.myexperience.app.ui.theme.Forest
+import com.myexperience.app.ui.theme.Sand
+import com.myexperience.app.ui.theme.Sea
+import com.myexperience.app.ui.theme.Terracotta
 import com.myexperience.app.update.AppUpdater
 import com.myexperience.app.update.UpdateState
 import kotlinx.coroutines.launch
@@ -66,14 +67,14 @@ fun ProfileScreen(
     }
 
     val countries = remember(all) {
-        all.map { it.place.country }.filter { it.isNotBlank() }.groupingBy { it }.eachCount()
+        all.flatMap { it.countries }.groupingBy { it }.eachCount()
             .entries.sortedByDescending { it.value }
     }
     val shown = remember(all, filter) {
         when (filter) {
             null -> all
             "♥" -> all.filter { it.place.favorite }
-            else -> all.filter { it.place.country == filter }
+            else -> all.filter { filter in it.countries }
         }
     }
     val byYear = remember(shown) {
@@ -102,7 +103,7 @@ fun ProfileScreen(
                         .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp, topStart = 0.dp, topEnd = 0.dp))
                         .background(
                             Brush.linearGradient(
-                                listOf(Coral, Pink, Violet),
+                                listOf(Sea, Forest, Sand),
                                 start = Offset(shift * 600f, 0f),
                                 end = Offset(1200f - shift * 400f, 700f),
                             )
@@ -210,7 +211,7 @@ fun ProfileScreen(
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.SystemUpdate, null, tint = Pink)
+                Icon(Icons.Rounded.SystemUpdate, null, tint = Sea)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Controlla aggiornamenti", style = MaterialTheme.typography.titleSmall)
@@ -270,12 +271,12 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                 ),
             )
             Row(Modifier.align(Alignment.TopStart).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                GlassChip(countryFlag(place.country))
+                GlassChip(p.countries.ifEmpty { listOf(place.country) }.take(4).joinToString("") { countryFlag(it) })
                 if (place.favorite) {
                     Box(
                         Modifier.size(30.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Rounded.Favorite, null, tint = Pink, modifier = Modifier.size(16.dp)) }
+                    ) { Icon(Icons.Rounded.Favorite, null, tint = Terracotta, modifier = Modifier.size(16.dp)) }
                 }
             }
             // "linguetta" con il colore del tema del diario
@@ -288,8 +289,10 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
                     place.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp,
                     fontFamily = theme.font, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 19.sp,
                 )
+                val route = p.route
                 Text(
-                    place.locationName, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp,
+                    if (route.size > 1) "🚐 ${route.joinToString(" → ") { it.name }}" else place.locationName,
+                    color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }

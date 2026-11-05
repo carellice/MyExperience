@@ -68,6 +68,32 @@ data class JournalBlock(
     val mediaIdList: List<Long> get() = mediaIds.split(',').mapNotNull { it.trim().toLongOrNull() }
 }
 
+/**
+ * Tappa di un album: un album "on the road" ne ha più di una.
+ * La prima tappa coincide con il luogo principale dell'album ([Place.latitude]/[Place.longitude]).
+ */
+@Entity(
+    tableName = "place_stops",
+    foreignKeys = [ForeignKey(
+        entity = Place::class,
+        parentColumns = ["id"],
+        childColumns = ["placeId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("placeId")],
+)
+data class PlaceStop(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val placeId: Long,
+    val name: String,
+    val country: String,
+    val latitude: Double,
+    val longitude: Double,
+    val orderIndex: Int = 0,
+    val nights: Int = 0,
+    val notes: String = "",
+)
+
 /** Foto o video dell'album di un luogo. */
 @Entity(
     tableName = "album_media",
@@ -146,7 +172,18 @@ data class PlaceWithMedia(
     @Embedded val place: Place,
     @Relation(parentColumn = "id", entityColumn = "placeId")
     val media: List<AlbumMedia>,
-)
+    @Relation(parentColumn = "id", entityColumn = "placeId")
+    val stops: List<PlaceStop> = emptyList(),
+) {
+    /** Tappe in ordine; un album senza tappe salvate ha come unica tappa il suo luogo. */
+    val route: List<PlaceStop>
+        get() = stops.ifEmpty {
+            listOf(PlaceStop(placeId = place.id, name = place.locationName, country = place.country,
+                latitude = place.latitude, longitude = place.longitude))
+        }
+
+    val countries: List<String> get() = route.map { it.country }.filter { it.isNotBlank() }.distinct()
+}
 
 data class TripWithDetails(
     @Embedded val trip: PlannedTrip,

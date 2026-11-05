@@ -7,8 +7,8 @@
 <p align="center"><em>Ogni viaggio, una storia.</em></p>
 
 <p align="center">
-  <a href="https://github.com/carellice/MyExperience/releases/latest"><img src="https://img.shields.io/github/v/release/carellice/MyExperience?label=download&color=FF3D7F" alt="Ultima release"></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B-7B5CFF" alt="Android 8.0+">
+  <a href="https://github.com/carellice/MyExperience/releases/latest"><img src="https://img.shields.io/github/v/release/carellice/MyExperience?label=download&color=2A8197" alt="Ultima release"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-5B8A4E" alt="Android 8.0+">
 </p>
 
 MyExperience è un diario di viaggio per Android: un globo 3D con i luoghi che hai visitato, album-diario con foto, video e blocchi di testo, e la pianificazione dei prossimi viaggi.
@@ -17,7 +17,8 @@ MyExperience è un diario di viaggio per Android: un globo 3D con i luoghi che h
 
 - 🌍 Globo 3D interattivo con i tuoi luoghi
 - 📔 Album-diario per ogni viaggio, con temi, foto e video
-- 🧳 Pianificazione dei viaggi con tappe e cose da fare
+- 🚐 Album "on the road" con più tappe, mappa e percorso
+- 🧳 Pianificazione dei viaggi con tappe e cose da fare: a viaggio concluso diventa da solo un unico album
 - 👤 Profilo con statistiche (paesi, giorni, foto, video)
 - 🔄 Aggiornamento in-app direttamente dalle GitHub Releases
 

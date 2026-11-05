@@ -8,6 +8,7 @@ import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.data.PickedLocation
 import com.myexperience.app.data.Place
+import com.myexperience.app.data.PlaceStop
 import com.myexperience.app.data.PlaceWithMedia
 import com.myexperience.app.data.PlannedTrip
 import com.myexperience.app.data.Profile
@@ -50,13 +51,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---- luoghi ----
     fun toggleFavorite(p: Place) = viewModelScope.launch { repo.setFavorite(p.id, !p.favorite) }
 
-    fun savePlace(place: Place, newCover: Uri?, onDone: (Long) -> Unit) = viewModelScope.launch {
+    suspend fun getStops(placeId: Long) = repo.getStops(placeId)
+
+    fun savePlace(place: Place, stops: List<PlaceStop>, newCover: Uri?, onDone: (Long) -> Unit) = viewModelScope.launch {
         var p = place
         if (newCover != null) {
             repo.importFile(newCover)?.let { p = p.copy(coverPath = it) }
         }
         val isNew = place.id == 0L
-        val id = repo.savePlace(p)
+        val id = repo.savePlace(p, stops)
         if (isNew) repo.seedTemplate(id)
         onDone(id)
     }
@@ -98,9 +101,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteMedia(item: AlbumMedia) = viewModelScope.launch { repo.deleteMedia(item) }
     fun setCover(placeId: Long, path: String) = viewModelScope.launch { repo.setCover(placeId, path) }
 
-    fun markDestinationVisited(destId: Long) = viewModelScope.launch {
-        repo.getDestination(destId)?.let { repo.updateDestination(it.copy(visited = true)) }
+    fun toggleVisited(d: TripDestination) = viewModelScope.launch { repo.updateDestination(d.copy(visited = !d.visited)) }
+
+    /** Chiude il viaggio trasformandolo in album; [onDone] riceve l'id dell'album (null se senza mete). */
+    fun completeTrip(tripId: Long, onDone: (Long?) -> Unit) = viewModelScope.launch {
+        onDone(repo.tripToAlbum(tripId))
     }
+
+    /** Controlla i viaggi conclusi e li trasforma in album (all'avvio e al ritorno nell'app). */
+    fun completeEndedTrips() = viewModelScope.launch { repo.completeEndedTrips() }
 
     // ---- posizione ----
     fun setPicked(loc: PickedLocation) { _picked.value = loc }

@@ -19,26 +19,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val Coral = Color(0xFFFF7A59)
-val Pink = Color(0xFFFF3D7F)
-val Violet = Color(0xFF7B5CFF)
-val Ocean = Color(0xFF22C1C3)
-val Lime = Color(0xFF9BE15D)
-val Gold = Color(0xFFFFC145)
+// Palette "pianeta Terra": mare, costa, foreste, terra cotta dal sole, sabbia, roccia di montagna.
+val Sea = Color(0xFF2A8197)
+val Lagoon = Color(0xFF4FB0A5)
+val Forest = Color(0xFF5B8A4E)
+val Moss = Color(0xFF8BB063)
+val Terracotta = Color(0xFFD07A4D)
+val Sand = Color(0xFFE6B65C)
+val Rock = Color(0xFF6E7A82)
 
-val BrandBrush = Brush.linearGradient(listOf(Coral, Pink, Violet))
-val BrandColors = listOf(Coral, Pink, Violet)
+/** Dal mare alla terraferma. */
+val BrandBrush = Brush.linearGradient(listOf(Sea, Forest))
+val BrandColors = listOf(Sea, Lagoon, Forest)
 
-/** Gradienti per copertine e schede viaggio. */
+/** Gradienti per copertine e schede viaggio: paesaggi della Terra. */
 val TripGradients: List<List<Color>> = listOf(
-    listOf(Color(0xFFFF7A59), Color(0xFFFF3D7F)),
-    listOf(Color(0xFF7B5CFF), Color(0xFF22C1C3)),
-    listOf(Color(0xFF00B09B), Color(0xFF96C93D)),
-    listOf(Color(0xFFFC466B), Color(0xFF3F5EFB)),
-    listOf(Color(0xFFF7971E), Color(0xFFFFD200)),
-    listOf(Color(0xFF8E2DE2), Color(0xFFFF6CAB)),
-    listOf(Color(0xFF0F2027), Color(0xFF2C5364)),
-    listOf(Color(0xFF11998E), Color(0xFF38EF7D)),
+    listOf(Color(0xFF1F6E82), Color(0xFF5FB3C2)), // mare aperto
+    listOf(Color(0xFF2F5D3A), Color(0xFF7FA650)), // foresta
+    listOf(Color(0xFFB85C35), Color(0xFFE3B66B)), // deserto
+    listOf(Color(0xFF4A5560), Color(0xFF93A3AD)), // montagna
+    listOf(Color(0xFF8A3B24), Color(0xFFD0784A)), // canyon
+    listOf(Color(0xFF2A9D8F), Color(0xFFA8D5BA)), // laguna
+    listOf(Color(0xFF34617F), Color(0xFFAFCFDD)), // ghiacciaio
+    listOf(Color(0xFF5E6B2E), Color(0xFFB9A85C)), // colline e vigneti
 )
 
 fun gradientFor(seed: Long): Brush {
@@ -46,46 +49,58 @@ fun gradientFor(seed: Long): Brush {
     return Brush.linearGradient(c)
 }
 
+// Scuro: oceano di notte
 private val DarkScheme = darkColorScheme(
-    primary = Pink,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF3A1730),
-    onPrimaryContainer = Color(0xFFFFD9E3),
-    secondary = Ocean,
-    onSecondary = Color.White,
-    tertiary = Coral,
-    background = Color(0xFF0D0E18),
-    onBackground = Color(0xFFF2F1F8),
-    surface = Color(0xFF161726),
-    onSurface = Color(0xFFF2F1F8),
-    surfaceVariant = Color(0xFF222338),
-    onSurfaceVariant = Color(0xFFA9A8C2),
-    surfaceContainer = Color(0xFF1B1C2E),
-    surfaceContainerHigh = Color(0xFF242539),
-    surfaceContainerHighest = Color(0xFF2D2E45),
-    outline = Color(0xFF3A3B55),
-    outlineVariant = Color(0xFF2C2D44),
+    primary = Color(0xFF5FB3C2),
+    onPrimary = Color(0xFF00343E),
+    primaryContainer = Color(0xFF173A42),
+    onPrimaryContainer = Color(0xFFC4E9EF),
+    secondary = Color(0xFF93BF7E),
+    onSecondary = Color(0xFF13300F),
+    secondaryContainer = Color(0xFF243B22),
+    onSecondaryContainer = Color(0xFFCFE8C2),
+    tertiary = Color(0xFFE38D5F),
+    tertiaryContainer = Color(0xFF4A2A1A),
+    onTertiaryContainer = Color(0xFFFFDBC9),
+    surfaceTint = Color(0xFF5FB3C2),
+    background = Color(0xFF0D1416),
+    onBackground = Color(0xFFEDF1EC),
+    surface = Color(0xFF141D20),
+    onSurface = Color(0xFFEDF1EC),
+    surfaceVariant = Color(0xFF20302F),
+    onSurfaceVariant = Color(0xFFA5B5AF),
+    surfaceContainer = Color(0xFF182326),
+    surfaceContainerHigh = Color(0xFF1F2C2F),
+    surfaceContainerHighest = Color(0xFF283739),
+    outline = Color(0xFF364744),
+    outlineVariant = Color(0xFF263533),
 )
 
+// Chiaro: sabbia e carta naturale
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFFE8336F),
+    primary = Color(0xFF1F6E80),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFE0EA),
-    onPrimaryContainer = Color(0xFF5C0A2A),
-    secondary = Color(0xFF0E9FA1),
+    primaryContainer = Color(0xFFCDE7EB),
+    onPrimaryContainer = Color(0xFF06333C),
+    secondary = Color(0xFF4E7D3F),
     onSecondary = Color.White,
-    tertiary = Coral,
-    background = Color(0xFFF6F4FB),
-    onBackground = Color(0xFF15142A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF15142A),
-    surfaceVariant = Color(0xFFEDEAF6),
-    onSurfaceVariant = Color(0xFF6A6884),
-    surfaceContainer = Color(0xFFF1EEF8),
-    surfaceContainerHigh = Color(0xFFEAE6F4),
-    surfaceContainerHighest = Color(0xFFE2DEF0),
-    outline = Color(0xFFD3CFE3),
-    outlineVariant = Color(0xFFE4E0F0),
+    secondaryContainer = Color(0xFFD7E8C9),
+    onSecondaryContainer = Color(0xFF173012),
+    tertiary = Color(0xFFB8603A),
+    tertiaryContainer = Color(0xFFF6DCCB),
+    onTertiaryContainer = Color(0xFF3E1B08),
+    surfaceTint = Color(0xFF1F6E80),
+    background = Color(0xFFF4F0E6),
+    onBackground = Color(0xFF1E2522),
+    surface = Color(0xFFFFFCF6),
+    onSurface = Color(0xFF1E2522),
+    surfaceVariant = Color(0xFFEAE3D3),
+    onSurfaceVariant = Color(0xFF66665A),
+    surfaceContainer = Color(0xFFF0EADD),
+    surfaceContainerHigh = Color(0xFFE9E2D2),
+    surfaceContainerHighest = Color(0xFFE1D9C7),
+    outline = Color(0xFFCFC6B2),
+    outlineVariant = Color(0xFFE2DAC8),
 )
 
 private val base = Typography()

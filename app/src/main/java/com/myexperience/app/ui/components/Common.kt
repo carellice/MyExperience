@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.BrandColors
-import com.myexperience.app.ui.theme.Gold
+import com.myexperience.app.ui.theme.Sand
 import com.myexperience.app.ui.theme.gradientFor
 import kotlinx.coroutines.delay
 import java.io.File
@@ -60,6 +60,7 @@ import java.util.Locale
 val Categories = listOf(
     "Città" to "🏙️", "Mare" to "🏖️", "Montagna" to "🏔️", "Natura" to "🌿",
     "Cultura" to "🏛️", "Food" to "🍝", "Avventura" to "🧗", "Relax" to "🧘",
+    "On the road" to "🚐",
 )
 val Moods = listOf("😍", "🤩", "🥳", "😌", "🤯", "🥹", "😎", "😴")
 val Transports = listOf("✈️ Aereo", "🚆 Treno", "🚗 Auto", "🚢 Nave", "🚌 Bus", "🏍️ Moto")
@@ -289,7 +290,7 @@ fun RatingStars(rating: Int, size: Dp = 18.dp, onChange: ((Int) -> Unit)? = null
             Icon(
                 Icons.Rounded.Star,
                 contentDescription = null,
-                tint = if (active) Gold else MaterialTheme.colorScheme.outline,
+                tint = if (active) Sand else MaterialTheme.colorScheme.outline,
                 modifier = Modifier
                     .size(size)
                     .graphicsLayer { scaleX = scale; scaleY = scale }

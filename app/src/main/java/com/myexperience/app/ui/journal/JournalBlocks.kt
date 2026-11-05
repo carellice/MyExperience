@@ -63,7 +63,9 @@ val DiaryThemes = listOf(
     DiaryTheme("sunset", "Tramonto", "🌅", Color(0xFFFFEDE4), Color(0xFFFFD6DC), Color(0xFF5A2A3A), Color(0xFF8E5A68), Color(0xFFE85D75), FontFamily.Serif, false, false),
     DiaryTheme("kraft", "Kraft", "📦", Color(0xFFD4B48C), Color(0xFFC6A276), Color(0xFF2E2118), Color(0xFF5A4532), Color(0xFF7A2E1A), FontFamily.Serif, true, false),
     DiaryTheme("forest", "Foresta", "🌲", Color(0xFFE9F1E4), Color(0xFFD6E5CC), Color(0xFF1F3A26), Color(0xFF55705C), Color(0xFF3A7D44), FontFamily.Serif, false, false),
-    DiaryTheme("minimal", "Minimal", "⚪", Color(0xFFFFFFFF), Color(0xFFF3F3F6), Color(0xFF15142A), Color(0xFF6A6884), Color(0xFFFF3D7F), FontFamily.SansSerif, false, false),
+    DiaryTheme("minimal", "Minimal", "⚪", Color(0xFFFFFFFF), Color(0xFFF3F3F6), Color(0xFF15142A), Color(0xFF6A6884), Color(0xFF1F6E80), FontFamily.SansSerif, false, false),
+    DiaryTheme("desert", "Deserto", "🏜️", Color(0xFFF6E7CF), Color(0xFFEBD3AE), Color(0xFF4A2E1C), Color(0xFF85644A), Color(0xFFB85C35), FontFamily.Serif, true, false),
+    DiaryTheme("alpine", "Montagna", "🏔️", Color(0xFFEEF1F2), Color(0xFFDCE3E6), Color(0xFF243039), Color(0xFF5E6E78), Color(0xFF3D6E8F), FontFamily.SansSerif, false, false),
 )
 
 fun themeById(id: String) = DiaryThemes.firstOrNull { it.id == id } ?: DiaryThemes[0]

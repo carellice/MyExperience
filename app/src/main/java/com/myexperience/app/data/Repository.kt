@@ -8,6 +8,8 @@ import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -15,6 +17,8 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.Locale
 import java.util.UUID
 
@@ -24,28 +28,43 @@ class Repository(private val context: Context, db: AppDatabase) {
     private val prefs = context.getSharedPreferences("profile", Context.MODE_PRIVATE)
 
     private val mediaOrder = compareBy<AlbumMedia>({ it.addedAt }, { it.id })
+    private val stopOrder = compareBy<PlaceStop>({ it.orderIndex }, { it.id })
+    private val tripMutex = Mutex()
 
     // ---------- Luoghi ----------
     val places: Flow<List<PlaceWithMedia>> = placeDao.observeAll().map { list ->
-        list.map { it.copy(media = it.media.sortedWith(mediaOrder)) }
+        list.map { it.copy(media = it.media.sortedWith(mediaOrder), stops = it.stops.sortedWith(stopOrder)) }
     }
 
     fun place(id: Long): Flow<PlaceWithMedia?> = placeDao.observe(id).map { p ->
-        p?.copy(media = p.media.sortedWith(mediaOrder))
+        p?.copy(media = p.media.sortedWith(mediaOrder), stops = p.stops.sortedWith(stopOrder))
     }
 
     suspend fun getPlace(id: Long): Place? = placeDao.get(id)
 
-    suspend fun savePlace(place: Place): Long {
-        return if (place.id == 0L) {
-            placeDao.insert(place)
+    suspend fun getStops(placeId: Long): List<PlaceStop> = placeDao.stopsFor(placeId)
+
+    /** Salva l'album e le sue tappe; il luogo principale dell'album è sempre la prima tappa. */
+    suspend fun savePlace(place: Place, stops: List<PlaceStop>): Long {
+        val first = stops.firstOrNull()
+        val p = if (first == null) place else place.copy(
+            locationName = first.name, country = first.country,
+            latitude = first.latitude, longitude = first.longitude,
+        )
+        val id = if (p.id == 0L) {
+            placeDao.insert(p)
         } else {
-            val old = placeDao.get(place.id)
-            placeDao.update(place)
+            val old = placeDao.get(p.id)
+            placeDao.update(p)
             val oldCover = old?.coverPath
-            if (oldCover != null && oldCover != place.coverPath) deleteIfUnused(place.id, oldCover)
-            place.id
+            if (oldCover != null && oldCover != p.coverPath) deleteIfUnused(p.id, oldCover)
+            p.id
         }
+        if (stops.isNotEmpty()) {
+            placeDao.deleteStops(id)
+            placeDao.insertStops(stops.mapIndexed { i, s -> s.copy(id = 0, placeId = id, orderIndex = i) })
+        }
+        return id
     }
 
     suspend fun deletePlace(place: Place) = withContext(Dispatchers.IO) {
@@ -138,6 +157,13 @@ class Repository(private val context: Context, db: AppDatabase) {
                     "cosa ti porterai dietro. Tocca ✏️ Personalizza per modificare tutto."
             },
         )
+        val stops = placeDao.stopsFor(placeId)
+        if (stops.size > 1) {
+            add("HEADING", "Le tappe del viaggio", size = 1, font = "cursive")
+            add("LIST", stops.joinToString("\n") { s ->
+                s.name + if (s.nights > 0) " · ${s.nights} ${if (s.nights == 1) "notte" else "notti"}" else ""
+            })
+        }
         images.firstOrNull()?.let { add("PHOTO", place.locationName, it.id.toString(), style = "polaroid") }
         if (images.size > 1) {
             add("GALLERY", "", images.drop(1).take(4).joinToString(",") { it.id.toString() })
@@ -212,6 +238,50 @@ class Repository(private val context: Context, db: AppDatabase) {
         if (trip.id == 0L) tripDao.insert(trip) else { tripDao.update(trip); trip.id }
 
     suspend fun deleteTrip(trip: PlannedTrip) = tripDao.delete(trip)
+
+    /**
+     * Trasforma un viaggio in un unico album con tutte le sue mete come tappe, poi rimuove il viaggio
+     * dalla lista di quelli da organizzare. Ritorna l'id dell'album, o null se il viaggio non ha mete.
+     */
+    suspend fun tripToAlbum(tripId: Long): Long? = tripMutex.withLock { convertTrip(tripId) }
+
+    /** Converte in album tutti i viaggi già conclusi. */
+    suspend fun completeEndedTrips() = tripMutex.withLock {
+        val today = LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        tripDao.endedBefore(today).forEach { convertTrip(it) }
+    }
+
+    private suspend fun convertTrip(tripId: Long): Long? {
+        val t = tripDao.getWithDetails(tripId) ?: return null
+        val dests = t.destinations.sortedWith(compareBy({ it.orderIndex }, { it.id }))
+        val first = dests.firstOrNull() ?: return null
+        val trip = t.trip
+        val start = trip.startDate ?: LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val countries = dests.map { it.country }.filter { it.isNotBlank() }.distinct()
+        val place = Place(
+            title = trip.name,
+            locationName = first.name,
+            country = first.country,
+            latitude = first.latitude,
+            longitude = first.longitude,
+            startDate = start,
+            endDate = trip.endDate ?: start,
+            description = trip.notes,
+            budget = trip.budget,
+            category = if (dests.size > 1 || countries.size > 1) "On the road" else "Città",
+            mood = "🤩",
+        )
+        val stops = dests.map { d ->
+            PlaceStop(
+                placeId = 0, name = d.name, country = d.country, latitude = d.latitude,
+                longitude = d.longitude, nights = d.nights, notes = d.notes,
+            )
+        }
+        val id = savePlace(place, stops)
+        seedTemplate(id)
+        tripDao.delete(trip)
+        return id
+    }
 
     suspend fun getDestination(id: Long) = tripDao.getDestination(id)
 

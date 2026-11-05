@@ -586,9 +586,9 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         ordered.forEachIndexed { i, m ->
             val p = latLonToXyz(m.lat, m.lon)
             val c = when (m.kind) {
-                1 -> floatArrayOf(0.20f, 0.85f, 0.95f)   // in programma: azzurro
+                1 -> floatArrayOf(0.56f, 0.83f, 0.87f)   // in programma: azzurro cielo
                 2 -> floatArrayOf(1f, 1f, 1f)            // nuovo punto
-                else -> floatArrayOf(1f, 0.30f, 0.52f)   // visitato: rosa
+                else -> floatArrayOf(0.94f, 0.64f, 0.42f) // visitato: terracotta
             }
             val o = i * 8
             data[o] = p[0]; data[o + 1] = p[1]; data[o + 2] = p[2]

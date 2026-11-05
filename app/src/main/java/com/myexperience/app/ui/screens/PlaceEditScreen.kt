@@ -18,14 +18,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddAPhoto
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.Place
+import com.myexperience.app.data.PlaceStop
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.gradientFor
@@ -51,7 +58,6 @@ import java.io.File
 fun PlaceEditScreen(
     vm: MainViewModel,
     placeId: Long,
-    fromDestinationId: Long,
     onBack: () -> Unit,
     onPickLocation: () -> Unit,
     onSaved: (Long) -> Unit,
@@ -59,10 +65,8 @@ fun PlaceEditScreen(
     val context = LocalContext.current
     var loaded by rememberSaveable { mutableStateOf(false) }
     var title by rememberSaveable { mutableStateOf("") }
-    var locationName by rememberSaveable { mutableStateOf("") }
-    var country by rememberSaveable { mutableStateOf("") }
-    var lat by rememberSaveable { mutableStateOf<Double?>(null) }
-    var lon by rememberSaveable { mutableStateOf<Double?>(null) }
+    val stops = rememberSaveable(saver = StopsSaver) { mutableStateListOf<PlaceStop>() }
+    var editStop by remember { mutableStateOf<Int?>(null) }
     var start by rememberSaveable { mutableLongStateOf(todayUtcMillis()) }
     var end by rememberSaveable { mutableLongStateOf(todayUtcMillis()) }
     var description by rememberSaveable { mutableStateOf("") }
@@ -78,28 +82,21 @@ fun PlaceEditScreen(
     var createdAt by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
     var showDates by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
-    var destToMark by rememberSaveable { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
         if (loaded) return@LaunchedEffect
         loaded = true
         if (placeId != 0L) {
             vm.getPlace(placeId)?.let { p ->
-                title = p.title; locationName = p.locationName; country = p.country
-                lat = p.latitude; lon = p.longitude; start = p.startDate; end = p.endDate
+                title = p.title; start = p.startDate; end = p.endDate
                 description = p.description; highlights = p.highlights; companions = p.companions
                 budget = p.budget; rating = p.rating; mood = p.mood; category = p.category
                 coverPath = p.coverPath; favorite = p.favorite; createdAt = p.createdAt
-            }
-        } else if (fromDestinationId != 0L) {
-            vm.getDestination(fromDestinationId)?.let { d ->
-                destToMark = d.id
-                locationName = d.name; country = d.country; lat = d.latitude; lon = d.longitude
-                title = "Esperienza a ${d.name}"
-                description = d.notes
-                vm.getTrip(d.tripId)?.let { t ->
-                    t.startDate?.let { start = it; end = t.endDate ?: it }
-                    if (t.budget.isNotBlank()) budget = t.budget
+                val saved = vm.getStops(placeId)
+                stops.clear()
+                stops += saved.ifEmpty {
+                    listOf(PlaceStop(placeId = p.id, name = p.locationName, country = p.country,
+                        latitude = p.latitude, longitude = p.longitude))
                 }
             }
         }
@@ -108,33 +105,31 @@ fun PlaceEditScreen(
     val picked by vm.pickedLocation.collectAsStateWithLifecycle()
     LaunchedEffect(picked) {
         picked?.let {
-            lat = it.latitude; lon = it.longitude
-            locationName = it.name; country = it.country
+            stops += PlaceStop(placeId = placeId, name = it.name, country = it.country,
+                latitude = it.latitude, longitude = it.longitude)
             if (title.isBlank()) title = "Esperienza a ${it.name}"
+            if (stops.size > 1 && category == "Città") category = "On the road"
             vm.consumePicked()
         }
     }
 
     val save: () -> Unit = {
-        val la = lat
-        val lo = lon
         when {
             saving -> Unit
             title.isBlank() -> Toast.makeText(context, "Dai un titolo all'esperienza", Toast.LENGTH_SHORT).show()
-            la == null || lo == null || locationName.isBlank() ->
-                Toast.makeText(context, "Scegli il luogo sulla mappa", Toast.LENGTH_SHORT).show()
+            stops.isEmpty() -> Toast.makeText(context, "Aggiungi almeno un luogo dalla mappa", Toast.LENGTH_SHORT).show()
             else -> {
                 saving = true
+                val first = stops.first()
                 val place = Place(
-                    id = placeId, title = title.trim(), locationName = locationName.trim(),
-                    country = country.trim(), latitude = la, longitude = lo,
+                    id = placeId, title = title.trim(), locationName = first.name,
+                    country = first.country, latitude = first.latitude, longitude = first.longitude,
                     startDate = start, endDate = end, description = description.trim(),
                     highlights = highlights.trim(), companions = companions.trim(),
                     rating = rating, mood = mood, category = category, budget = budget.trim(),
                     coverPath = coverPath, favorite = favorite, createdAt = createdAt,
                 )
-                if (destToMark != 0L) vm.markDestinationVisited(destToMark)
-                vm.savePlace(place, newCover) { onSaved(it) }
+                vm.savePlace(place, stops.toList(), newCover) { onSaved(it) }
             }
         }
     }
@@ -206,12 +201,25 @@ fun PlaceEditScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(14.dp))
-                FieldLabel("Luogo")
+                FieldLabel(if (stops.size > 1) "Tappe · viaggio on the road" else "Luogo")
+                stops.forEachIndexed { i, s ->
+                    StopRow(
+                        index = i,
+                        stop = s,
+                        multi = stops.size > 1,
+                        canUp = i > 0,
+                        canDown = i < stops.lastIndex,
+                        onClick = { editStop = i },
+                        onUp = { stops.add(i - 1, stops.removeAt(i)) },
+                        onDown = { stops.add(i + 1, stops.removeAt(i)) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
                         .bounceClick(onClick = onPickLocation)
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -219,34 +227,18 @@ fun PlaceEditScreen(
                     Box(
                         Modifier.size(40.dp).clip(CircleShape).background(BrandBrush),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Rounded.Place, null, tint = Color.White) }
+                    ) { Icon(if (stops.isEmpty()) Icons.Rounded.Place else Icons.Rounded.Add, null, tint = Color.White) }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        if (lat != null) {
-                            Text(locationName.ifBlank { "Luogo selezionato" }, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                country.ifBlank { "Tocca per cambiare" },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            Text("Scegli sulla mappa", style = MaterialTheme.typography.titleSmall)
-                            Text("Cerca una città o tocca la mappa", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                if (lat != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            locationName, { locationName = it }, label = { Text("Nome luogo") },
-                            singleLine = true, shape = RoundedCornerShape(16.dp), colors = appTextFieldColors(),
-                            modifier = Modifier.weight(1f),
+                        Text(
+                            if (stops.isEmpty()) "Scegli sulla mappa" else "Aggiungi una tappa",
+                            style = MaterialTheme.typography.titleSmall,
                         )
-                        OutlinedTextField(
-                            country, { country = it }, label = { Text("Paese") },
-                            singleLine = true, shape = RoundedCornerShape(16.dp), colors = appTextFieldColors(),
-                            modifier = Modifier.weight(1f),
+                        Text(
+                            if (stops.isEmpty()) "Cerca una città o tocca la mappa"
+                            else "Più tappe = un unico album on the road",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -336,6 +328,103 @@ fun PlaceEditScreen(
             onDismiss = { showDates = false },
             onConfirm = { s, e -> start = s; end = e; showDates = false },
         )
+    }
+
+    editStop?.let { i ->
+        val s = stops.getOrNull(i) ?: return@let
+        var name by remember(i, s) { mutableStateOf(s.name) }
+        var country by remember(i, s) { mutableStateOf(s.country) }
+        var nights by remember(i, s) { mutableIntStateOf(s.nights) }
+        var notes by remember(i, s) { mutableStateOf(s.notes) }
+        AlertDialog(
+            onDismissRequest = { editStop = null },
+            title = { Text("📍 Tappa ${i + 1}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Nome luogo") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                    OutlinedTextField(country, { country = it }, label = { Text("Paese") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Notti", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        FilledTonalIconButton(onClick = { if (nights > 0) nights-- }) { Text("−", fontSize = 20.sp) }
+                        Text("$nights", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 14.dp))
+                        FilledTonalIconButton(onClick = { nights++ }) { Text("+", fontSize = 20.sp) }
+                    }
+                    OutlinedTextField(notes, { notes = it }, label = { Text("Note") }, minLines = 2, shape = RoundedCornerShape(16.dp))
+                    TextButton(onClick = { stops.removeAt(i); editStop = null }) {
+                        Text("Rimuovi tappa", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    stops[i] = s.copy(name = name.trim().ifBlank { s.name }, country = country.trim(), nights = nights, notes = notes.trim())
+                    editStop = null
+                }) { Text("Salva") }
+            },
+            dismissButton = { TextButton(onClick = { editStop = null }) { Text("Annulla") } },
+        )
+    }
+}
+
+/** Le tappe sopravvivono a rotazioni e alla navigazione verso la mappa. */
+private val StopsSaver = listSaver<SnapshotStateList<PlaceStop>, Any>(
+    save = { list ->
+        list.flatMap { listOf(it.id, it.name, it.country, it.latitude, it.longitude, it.nights, it.notes) }
+    },
+    restore = { flat ->
+        flat.chunked(7).map { c ->
+            PlaceStop(
+                id = c[0] as Long, placeId = 0, name = c[1] as String, country = c[2] as String,
+                latitude = c[3] as Double, longitude = c[4] as Double, nights = c[5] as Int, notes = c[6] as String,
+            )
+        }.toMutableStateList()
+    },
+)
+
+@Composable
+private fun StopRow(
+    index: Int,
+    stop: PlaceStop,
+    multi: Boolean,
+    canUp: Boolean,
+    canDown: Boolean,
+    onClick: () -> Unit,
+    onUp: () -> Unit,
+    onDown: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .bounceClick(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(BrandBrush),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (multi) Text("${index + 1}", color = Color.White, fontWeight = FontWeight.Black)
+            else Icon(Icons.Rounded.Place, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("${countryFlag(stop.country)} ${stop.name}", style = MaterialTheme.typography.titleSmall)
+            val sub = listOfNotNull(
+                stop.country.ifBlank { null },
+                if (stop.nights > 0) "🌙 ${stop.nights}" else null,
+            ).joinToString(" · ").ifBlank { "Tocca per modificare" }
+            Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (multi) {
+            IconButton(onClick = onUp, enabled = canUp, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Rounded.ArrowUpward, "Su", Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDown, enabled = canDown, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Rounded.ArrowDownward, "Giù", Modifier.size(18.dp))
+            }
+        }
     }
 }
 

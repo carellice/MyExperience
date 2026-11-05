@@ -9,6 +9,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -45,7 +47,7 @@ import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.journal.*
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Pink
+import com.myexperience.app.ui.theme.Sea
 import java.io.File
 
 private data class EditRequest(val block: JournalBlock, val index: Int)
@@ -100,6 +102,7 @@ fun PlaceDetailScreen(
         return
     }
     val p = d.place
+    val route = d.route
     val theme = themeById(p.theme)
     val mediaById = remember(d.media) { d.media.associateBy { it.id } }
     val openMedia: (AlbumMedia) -> Unit = { m ->
@@ -140,7 +143,11 @@ fun PlaceDetailScreen(
                     )
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 22.dp, vertical = 18.dp).appear()) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GlassChip("${countryFlag(p.country)} ${p.locationName}")
+                            if (route.size > 1) {
+                                GlassChip("🚐 ${route.size} tappe · ${d.countries.joinToString("") { countryFlag(it) }}")
+                            } else {
+                                GlassChip("${countryFlag(p.country)} ${p.locationName}")
+                            }
                             GlassChip(p.mood)
                         }
                         Spacer(Modifier.height(10.dp))
@@ -152,6 +159,41 @@ fun PlaceDetailScreen(
                             Text(formatRange(p.startDate, p.endDate), color = theme.soft, style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.width(10.dp))
                             RatingStars(p.rating, 16.dp)
+                        }
+                    }
+                }
+            }
+
+            // ---------- TAPPE (viaggio on the road) ----------
+            if (route.size > 1) {
+                item(key = "route") {
+                    Column(Modifier.fillMaxWidth().background(theme.page).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Box(
+                            Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)),
+                        ) {
+                            OsmMap(
+                                pins = route.mapIndexed { i, s -> MapPin(i.toLong(), s.latitude, s.longitude, s.name) },
+                                modifier = Modifier.fillMaxSize(),
+                                drawRoute = true,
+                                interactive = false,
+                            )
+                            GlassChip("🧭 On the road", Modifier.padding(10.dp))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            route.forEachIndexed { i, s ->
+                                if (i > 0) Text("  →  ", color = theme.soft, fontSize = 13.sp)
+                                Text(
+                                    "${i + 1}. ${s.name}" + if (s.nights > 0) " · 🌙${s.nights}" else "",
+                                    color = theme.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                                    modifier = Modifier.clip(RoundedCornerShape(50))
+                                        .background(theme.accent.copy(alpha = 0.12f))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -262,7 +304,7 @@ fun PlaceDetailScreen(
                     AnimatedVisibility(importing, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                         LinearProgressIndicator(
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).clip(RoundedCornerShape(4.dp)),
-                            color = Pink,
+                            color = Sea,
                         )
                     }
                     Text(

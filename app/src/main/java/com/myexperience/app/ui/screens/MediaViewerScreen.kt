@@ -45,7 +45,7 @@ import coil.compose.AsyncImage
 import com.myexperience.app.MainViewModel
 import com.myexperience.app.ui.components.CircleIconButton
 import com.myexperience.app.ui.components.GlassChip
-import com.myexperience.app.ui.theme.Pink
+import com.myexperience.app.ui.theme.Lagoon
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -131,7 +131,7 @@ fun MediaViewerScreen(vm: MainViewModel, placeId: Long, startIndex: Int, onBack:
                         .size(54.dp)
                         .graphicsLayer { scaleX = s; scaleY = s }
                         .clip(RoundedCornerShape(12.dp))
-                        .then(if (selected) Modifier.border(2.dp, Pink, RoundedCornerShape(12.dp)) else Modifier)
+                        .then(if (selected) Modifier.border(2.dp, Lagoon, RoundedCornerShape(12.dp)) else Modifier)
                         .pointerInput(i) { detectTapGestures { scope.launch { pager.animateScrollToPage(i) } } },
                 )
             }

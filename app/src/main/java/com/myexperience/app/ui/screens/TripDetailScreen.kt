@@ -12,7 +12,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import android.widget.Toast
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -36,7 +39,7 @@ import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.TripDestination
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Lime
+import com.myexperience.app.ui.theme.Moss
 import com.myexperience.app.ui.theme.TripGradients
 
 @Composable
@@ -46,13 +49,22 @@ fun TripDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onAddDestination: () -> Unit,
-    onMarkVisited: (Long) -> Unit,
+    onCompleted: (Long) -> Unit,
 ) {
+    val context = LocalContext.current
     val flow = remember(tripId) { vm.trip(tripId) }
     val data by flow.collectAsStateWithLifecycle(initialValue = null)
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmComplete by remember { mutableStateOf(false) }
+    var completing by remember { mutableStateOf(false) }
     var editDest by remember { mutableStateOf<TripDestination?>(null) }
     var newTask by remember { mutableStateOf("") }
+
+    // il viaggio può sparire mentre è aperto (diventato album in automatico)
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(data) {
+        if (data != null) seen = true else if (seen && !completing) onBack()
+    }
 
     val d = data
     if (d == null) {
@@ -176,8 +188,40 @@ fun TripDetailScreen(
                 isLast = i == d.destinations.lastIndex,
                 modifier = Modifier.animateItem().appear(i),
                 onClick = { editDest = dest },
-                onVisited = { onMarkVisited(dest.id) },
+                onVisited = { vm.toggleVisited(dest) },
             )
+        }
+
+        // ---------- CHIUSURA VIAGGIO ----------
+        if (d.destinations.isNotEmpty()) {
+            item {
+                Column(
+                    Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(16.dp),
+                ) {
+                    Text(
+                        if (d.destinations.size > 1) "🚐 Diventerà un album on the road" else "📔 Diventerà un album",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        "Quando il viaggio finisce, tutte le tappe confluiscono in automatico in un unico album-diario. " +
+                            "Puoi anche chiuderlo subito.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    GradientButton(
+                        "Viaggio concluso · crea l'album",
+                        Modifier.fillMaxWidth(),
+                        icon = Icons.Rounded.Check,
+                        enabled = !completing,
+                    ) { confirmComplete = true }
+                }
+            }
         }
 
         // ---------- CHECKLIST ----------
@@ -220,7 +264,7 @@ fun TripDetailScreen(
                     Icon(
                         if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                         null,
-                        tint = if (checked) Lime else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (checked) Moss else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -296,6 +340,33 @@ fun TripDetailScreen(
                 }) { Text("Elimina", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Annulla") } },
+        )
+    }
+
+    if (confirmComplete) {
+        AlertDialog(
+            onDismissRequest = { confirmComplete = false },
+            title = { Text("Chiudere il viaggio?") },
+            text = {
+                Text(
+                    "Le ${d.destinations.size} tappe diventano un unico album con diario e rullino. " +
+                        "Il viaggio lascerà la lista dei viaggi da organizzare."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmComplete = false
+                    completing = true
+                    vm.completeTrip(tripId) { albumId ->
+                        if (albumId != null) onCompleted(albumId)
+                        else {
+                            completing = false
+                            Toast.makeText(context, "Aggiungi almeno una meta", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) { Text("Crea album") }
+            },
+            dismissButton = { TextButton(onClick = { confirmComplete = false }) { Text("Annulla") } },
         )
     }
 
@@ -393,10 +464,10 @@ private fun TimelineItem(
             }
             Spacer(Modifier.height(10.dp))
             if (dest.visited) {
-                InfoChip("✅ Visitata · nel tuo diario", container = Lime.copy(alpha = 0.2f))
+                InfoChip("✅ Visitata", container = Moss.copy(alpha = 0.2f), modifier = Modifier.bounceClick(onClick = onVisited))
             } else {
                 Text(
-                    "✓ Segna come visitata e crea l'album",
+                    "✓ Segna come visitata",
                     style = MaterialTheme.typography.labelLarge.copy(brush = BrandBrush),
                     modifier = Modifier.bounceClick(onClick = onVisited).padding(vertical = 4.dp),
                 )

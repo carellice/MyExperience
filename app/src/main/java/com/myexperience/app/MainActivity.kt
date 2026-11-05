@@ -32,6 +32,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -45,10 +48,9 @@ import com.myexperience.app.ui.components.FloatingEmoji
 import com.myexperience.app.ui.components.bounceClick
 import com.myexperience.app.ui.screens.*
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Coral
+import com.myexperience.app.ui.theme.Forest
 import com.myexperience.app.ui.theme.MyExperienceTheme
-import com.myexperience.app.ui.theme.Pink
-import com.myexperience.app.ui.theme.Violet
+import com.myexperience.app.ui.theme.Sea
 import com.myexperience.app.update.AppUpdater
 import com.myexperience.app.update.UpdateDialog
 import kotlinx.coroutines.delay
@@ -80,6 +82,14 @@ fun AppRoot() {
         showSplash = false
     }
     LaunchedEffect(Unit) { AppUpdater.check(ctx.applicationContext, manual = false) }
+
+    // I viaggi conclusi diventano album: controllo a ogni ritorno nell'app
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) vm.completeEndedTrips() }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
 
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
@@ -180,19 +190,11 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                 onOpenMedia = { index -> nav.navigate("viewer/$id/$index") },
             )
         }
-        composable(
-            "place_edit/{id}?dest={dest}",
-            arguments = listOf(
-                navArgument("id") { type = NavType.LongType },
-                navArgument("dest") { type = NavType.LongType; defaultValue = 0L },
-            ),
-        ) { e ->
+        composable("place_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
             val id = e.arguments?.getLong("id") ?: 0L
-            val dest = e.arguments?.getLong("dest") ?: 0L
             PlaceEditScreen(
                 vm = vm,
                 placeId = id,
-                fromDestinationId = dest,
                 onBack = { nav.popBackStack() },
                 onPickLocation = { nav.navigate("picker/place") },
                 onSaved = { savedId ->
@@ -236,7 +238,10 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                 onBack = { nav.popBackStack() },
                 onEdit = { nav.navigate("trip_edit/$id") },
                 onAddDestination = { nav.navigate("picker/$id") },
-                onMarkVisited = { destId -> nav.navigate("place_edit/0?dest=$destId") },
+                onCompleted = { albumId ->
+                    nav.popBackStack()
+                    nav.navigate("place/$albumId")
+                },
             )
         }
         composable("trip_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
@@ -265,7 +270,7 @@ private fun BottomBar(current: String?, onSelect: (String) -> Unit, onAdd: () ->
     ) {
         Row(
             Modifier
-                .shadow(24.dp, RoundedCornerShape(32.dp), ambientColor = Pink, spotColor = Pink)
+                .shadow(24.dp, RoundedCornerShape(32.dp), ambientColor = Sea, spotColor = Sea)
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .padding(8.dp),
@@ -288,7 +293,7 @@ private fun TabItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
         Modifier
             .clip(RoundedCornerShape(24.dp))
             .graphicsLayer { }
-            .background(Brush.linearGradient(listOf(Coral.copy(alpha = bgAlpha), Pink.copy(alpha = bgAlpha))))
+            .background(Brush.linearGradient(listOf(Sea.copy(alpha = bgAlpha), Forest.copy(alpha = bgAlpha))))
             .bounceClick(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp)
             .animateContentSize(spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)),
@@ -312,7 +317,7 @@ private fun AddButton(onClick: () -> Unit) {
         Modifier
             .padding(horizontal = 6.dp)
             .size(54.dp)
-            .shadow((14 * glow).dp, CircleShape, ambientColor = Pink, spotColor = Violet)
+            .shadow((14 * glow).dp, CircleShape, ambientColor = Sea, spotColor = Forest)
             .clip(CircleShape)
             .background(BrandBrush)
             .bounceClick(onClick = onClick),
@@ -335,7 +340,7 @@ private fun Splash() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    listOf(Color(0xFF0D0E18), Violet.copy(alpha = 0.6f + 0.2f * shift), Pink, Coral),
+                    listOf(Color(0xFF0B1416), Sea.copy(alpha = 0.7f + 0.2f * shift), Forest, Color(0xFFC9A46A)),
                 )
             ),
         contentAlignment = Alignment.Center,

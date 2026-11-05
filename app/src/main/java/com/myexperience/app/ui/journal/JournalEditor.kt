@@ -34,7 +34,7 @@ import com.myexperience.app.ui.components.appTextFieldColors
 import com.myexperience.app.ui.components.bounceClick
 import com.myexperience.app.ui.screens.SelectChip
 import com.myexperience.app.ui.theme.BrandBrush
-import com.myexperience.app.ui.theme.Pink
+import com.myexperience.app.ui.theme.Sea
 import java.io.File
 
 val StickerEmojis = listOf(
@@ -171,7 +171,7 @@ fun BlockEditorSheet(
                             Modifier
                                 .size(76.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .then(if (pos >= 0) Modifier.border(3.dp, Pink, RoundedCornerShape(14.dp)) else Modifier)
+                                .then(if (pos >= 0) Modifier.border(3.dp, Sea, RoundedCornerShape(14.dp)) else Modifier)
                                 .bounceClick {
                                     val next = if (multiple) {
                                         if (pos >= 0) selected - m.id else (selected + m.id).take(9)
@@ -355,7 +355,7 @@ fun ThemePickerSheet(current: String, onDismiss: () -> Unit, onPick: (String) ->
                                 .weight(1f)
                                 .clip(RoundedCornerShape(20.dp))
                                 .diaryPage(t)
-                                .then(if (t.id == current) Modifier.border(3.dp, Pink, RoundedCornerShape(20.dp)) else Modifier)
+                                .then(if (t.id == current) Modifier.border(3.dp, Sea, RoundedCornerShape(20.dp)) else Modifier)
                                 .bounceClick { onPick(t.id) }
                                 .padding(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,

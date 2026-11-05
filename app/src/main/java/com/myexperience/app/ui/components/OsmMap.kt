@@ -50,7 +50,7 @@ data class MapPin(
     val lat: Double,
     val lon: Double,
     val title: String,
-    val color: Int = 0xFFFF3D7F.toInt(),
+    val color: Int = 0xFFC8693F.toInt(),
 )
 
 /** Tile standard OpenStreetMap: gratuite, nessuna API key. */
@@ -130,7 +130,7 @@ fun OsmMap(
                 MapView.getTileSystem().minLatitude,
                 0,
             )
-            setBackgroundColor(if (dark) 0xFF0D0E18.toInt() else 0xFFEDEAF6.toInt())
+            setBackgroundColor(if (dark) 0xFF0D1416.toInt() else 0xFFEAE3D3.toInt())
             if (interactive) {
                 // evita che lo scroll del contenitore "rubi" i gesti della mappa
                 setOnTouchListener { v, _ ->
@@ -178,7 +178,7 @@ fun OsmMap(
                     val line = Polyline(map)
                     line.setPoints(pins.map { GeoPoint(it.lat, it.lon) })
                     line.outlinePaint.apply {
-                        color = 0xFFFF3D7F.toInt()
+                        color = 0xFF1F6E80.toInt()
                         strokeWidth = 9f
                         strokeCap = Paint.Cap.ROUND
                         pathEffect = DashPathEffect(floatArrayOf(28f, 18f), 0f)
