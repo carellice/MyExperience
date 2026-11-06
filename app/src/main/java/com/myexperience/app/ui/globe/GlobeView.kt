@@ -55,6 +55,8 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
     var onEmptyTap: (() -> Unit)? = null
     var onLongPress: ((Double, Double) -> Unit)? = null
     var onReady: (() -> Unit)? = null
+    /** Zoom spinto oltre il limite del globo: lat/lon del centro, per aprire la mappa della città. */
+    var onZoomPastLimit: ((Double, Double) -> Unit)? = null
 
     private val renderer = GlobeRenderer(context, camera)
 
@@ -71,7 +73,8 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
         renderer.setMarkers(markers, selectedId)
     }
 
-    fun flyTo(lat: Double, lon: Double, zoomIn: Boolean) = renderer.flyTo(lat, lon, zoomIn)
+    /** close = avvicinati il più possibile (città), altrimenti zoom medio (paese). */
+    fun flyTo(lat: Double, lon: Double, zoomIn: Boolean, close: Boolean = false) = renderer.flyTo(lat, lon, zoomIn, close)
 
     /** Rotazione automatica quando inattivo (disattivata mentre una scheda è aperta). */
     fun setAutoRotate(enabled: Boolean) {
@@ -86,7 +89,10 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
 
     private val scaleDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
-            renderer.zoomBy(detector.scaleFactor)
+            if (renderer.zoomBy(detector.scaleFactor)) {
+                val (lat, lon) = renderer.center()
+                onZoomPastLimit?.invoke(lat, lon)
+            }
             return true
         }
     })
@@ -115,7 +121,10 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
-            renderer.surfacePoint(e.x, e.y)?.let { (lat, lon) -> renderer.flyTo(lat, lon, true) }
+            renderer.surfacePoint(e.x, e.y)?.let { (lat, lon) ->
+                // già al massimo: il doppio tocco apre la mappa della città
+                if (renderer.atMinZoom()) onZoomPastLimit?.invoke(lat, lon) else renderer.flyTo(lat, lon, true)
+            }
             return true
         }
 
@@ -171,6 +180,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
     @Volatile private var velYaw = 0f
     @Volatile private var velPitch = 0f
     @Volatile private var touching = false
+    @Volatile private var overZoom = 1f
     @Volatile private var lastInteraction = SystemClock.uptimeMillis()
     @Volatile var autoRotate = true
     @Volatile var settings = GlobeSettings()
@@ -182,10 +192,11 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
     private var flyTo = FloatArray(3)
 
     private var defaultDist = 3f
-    private var minDist = 1.25f
+    private var minDist = 1.15f
     private var maxDist = 5f
     private var viewW = 1
     private var viewH = 1
+    private var aspect = 1f
     private val fov = 40f
 
     // ---- matrici ----
@@ -237,6 +248,7 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
     fun touchDown() {
         touching = true
         flying = false
+        overZoom = 1f
         velYaw = 0f
         velPitch = 0f
         lastInteraction = SystemClock.uptimeMillis()
@@ -266,19 +278,40 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         velPitch = (vy * k * 0.45f).coerceIn(-120f, 120f)
     }
 
-    fun zoomBy(factor: Float) {
+    /** Zoom sull'altitudine (non sulla distanza): resta fluido anche vicino alla superficie. True = limite superato. */
+    fun zoomBy(factor: Float): Boolean {
         flying = false
-        dist = (dist / factor).coerceIn(minDist, maxDist)
         lastInteraction = SystemClock.uptimeMillis()
+        if (factor > 1f && atMinZoom()) overZoom *= factor else if (factor < 1f) overZoom = 1f
+        dist = (1f + (dist - 1f) / factor).coerceIn(minDist, maxDist)
+        if (overZoom > 1.3f) {
+            overZoom = 1f
+            return true
+        }
+        return false
     }
 
-    fun flyTo(lat: Double, lon: Double, zoomIn: Boolean) {
+    fun atMinZoom() = dist <= minDist + 0.005f
+
+    /** Punto geografico al centro dello schermo. */
+    fun center(): Pair<Double, Double> {
+        var lon = yaw.toDouble()
+        while (lon > 180) lon -= 360
+        while (lon < -180) lon += 360
+        return pitch.toDouble() to lon
+    }
+
+    fun flyTo(lat: Double, lon: Double, zoomIn: Boolean, close: Boolean = false) {
         flyFrom = floatArrayOf(yaw, pitch, dist)
         // percorso angolare più breve
         var target = lon.toFloat()
         while (target - yaw > 180f) target -= 360f
         while (target - yaw < -180f) target += 360f
-        val targetDist = if (zoomIn) max(minDist + 0.25f, min(dist, defaultDist * 0.55f)) else dist
+        val targetDist = when {
+            close -> max(minDist, 1.35f) // regione nitida; più vicino la texture si sfoca
+            zoomIn -> max(minDist + 0.25f, min(dist, defaultDist * 0.55f))
+            else -> dist
+        }
         flyTo = floatArrayOf(target, lat.toFloat().coerceIn(-75f, 75f), targetDist)
         flyT = 0f
         velYaw = 0f
@@ -375,14 +408,14 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         GLES20.glViewport(0, 0, width, height)
         viewW = max(width, 1)
         viewH = max(height, 1)
-        val aspect = viewW.toFloat() / viewH
-        Matrix.perspectiveM(proj, 0, fov, aspect, 0.05f, 60f)
+        aspect = viewW.toFloat() / viewH
         // distanza per cui il globo occupa ~86% del lato corto
         val tanHalf = tan(Math.toRadians(fov / 2.0)).toFloat()
         val targetRadiusNdc = 0.86f * min(1f, aspect) // in NDC verticali
         val s = 1f / (tanHalf * targetRadiusNdc)
         defaultDist = sqrt(s * s + 1f)
-        minDist = 1.22f
+        // più vicino la texture diventa sfocata: oltre si passa alla mappa della città
+        minDist = 1.15f
         maxDist = defaultDist * 1.5f
         if (dist <= 0f) dist = defaultDist
         dist = dist.coerceIn(minDist, maxDist)
@@ -399,6 +432,8 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
             sunUpdatedAt = now
         }
 
+        // piano vicino proporzionale all'altitudine: niente tagli da vicino, profondità precisa da lontano
+        Matrix.perspectiveM(proj, 0, fov, aspect, max(0.01f, (dist - 1f) * 0.5f), dist + 2f)
         Matrix.setLookAtM(view, 0, 0f, 0f, dist, 0f, 0f, 0f, 0f, 1f, 0f)
         Matrix.setIdentityM(model, 0)
         Matrix.rotateM(model, 0, pitch, 1f, 0f, 0f)

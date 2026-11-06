@@ -15,8 +15,8 @@ android {
         applicationId = "com.myexperience.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.5.1"
+        versionCode = 8
+        versionName = "1.6.0"
     }
 
     // Chiave di firma fuori dal repo: ~/.android/myexperience-signing/signing.properties.

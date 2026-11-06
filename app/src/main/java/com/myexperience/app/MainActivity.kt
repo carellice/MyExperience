@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -127,86 +128,113 @@ fun AppRoot() {
     }
 }
 
+/** Curva "emphasized" di Material 3: parte decisa, arriva morbida. */
+private val Emphasized = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private const val NAV_MS = 450
+
+/** Direzione tra le schede della barra: +1 verso destra, -1 verso sinistra, 0 se non sono schede. */
+private fun tabDirection(from: String?, to: String?): Int {
+    val a = tabs.indexOfFirst { it.route == from }
+    val b = tabs.indexOfFirst { it.route == to }
+    return if (a < 0 || b < 0) 0 else (b - a).coerceIn(-1, 1)
+}
+
+// Le pagine entrano scorrendo per intero sopra la precedente, che arretra in parallasse.
+// Si usa lo scorrimento (non solo la dissolvenza) perché il globo è una SurfaceView e ignora l'alpha.
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.navEnter(): EnterTransition {
+    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+    return if (dir != 0) slideInHorizontally(tween(NAV_MS, easing = Emphasized)) { it * dir / 4 } + fadeIn(tween(NAV_MS / 2))
+    else slideInHorizontally(tween(NAV_MS, easing = Emphasized)) { it } + fadeIn(tween(NAV_MS / 3))
+}
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.navExit(): ExitTransition {
+    val dir = tabDirection(initialState.destination.route, targetState.destination.route)
+    return if (dir != 0) slideOutHorizontally(tween(NAV_MS, easing = Emphasized)) { -it * dir / 4 } + fadeOut(tween(NAV_MS / 2))
+    else slideOutHorizontally(tween(NAV_MS, easing = Emphasized)) { -it / 4 } +
+        scaleOut(tween(NAV_MS, easing = Emphasized), targetScale = 0.94f)
+}
+
+private fun navPopEnter(): EnterTransition =
+    slideInHorizontally(tween(NAV_MS, easing = Emphasized)) { -it / 4 } +
+        scaleIn(tween(NAV_MS, easing = Emphasized), initialScale = 0.94f)
+
+private fun navPopExit(): ExitTransition =
+    slideOutHorizontally(tween(NAV_MS, easing = Emphasized)) { it } + fadeOut(tween(NAV_MS, delayMillis = NAV_MS / 2))
+
 @Composable
 private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
-    val dur = 380
     NavHost(
         navController = nav,
         startDestination = "home",
-        enterTransition = {
-            fadeIn(tween(dur)) + slideInHorizontally(tween(dur, easing = FastOutSlowInEasing)) { it / 5 } +
-                scaleIn(tween(dur), initialScale = 0.96f)
-        },
-        exitTransition = { fadeOut(tween(dur / 2)) + scaleOut(tween(dur), targetScale = 0.97f) },
-        popEnterTransition = { fadeIn(tween(dur)) + scaleIn(tween(dur), initialScale = 0.97f) },
-        popExitTransition = {
-            fadeOut(tween(dur / 2)) + slideOutHorizontally(tween(dur, easing = FastOutSlowInEasing)) { it / 5 }
-        },
+        enterTransition = { navEnter() },
+        exitTransition = { navExit() },
+        popEnterTransition = { navPopEnter() },
+        popExitTransition = { navPopExit() },
     ) {
-        composable(
-            "home",
-            enterTransition = { fadeIn(tween(300)) },
-            exitTransition = { fadeOut(tween(200)) },
-        ) {
-            HomeScreen(
-                vm = vm,
-                onOpenPlace = { nav.navigate("place/$it") },
-                onOpenTrip = { nav.navigate("trip/$it") },
-                onAddAt = { loc ->
-                    vm.setPicked(loc)
-                    nav.navigate("place_edit/0")
-                },
-                onOpenUnesco = { nav.navigate("unesco") },
-            )
+        composable("home") {
+            Page {
+                HomeScreen(
+                    vm = vm,
+                    onOpenPlace = { nav.navigate("place/$it") },
+                    onOpenTrip = { nav.navigate("trip/$it") },
+                    onAddAt = { loc ->
+                        vm.setPicked(loc)
+                        nav.navigate("place_edit/0")
+                    },
+                    onOpenUnesco = { nav.navigate("unesco") },
+                )
+            }
         }
         composable("unesco") {
-            UnescoScreen(vm = vm, onBack = { nav.popBackStack() })
+            Page {
+                UnescoScreen(vm = vm, onBack = { nav.popBackStack() })
+            }
         }
-        composable(
-            "trips",
-            enterTransition = { fadeIn(tween(300)) },
-            exitTransition = { fadeOut(tween(200)) },
-        ) {
-            TripsScreen(
-                vm = vm,
-                onOpenTrip = { nav.navigate("trip/$it") },
-                onNewTrip = { nav.navigate("trip_edit/0") },
-            )
+        composable("trips") {
+            Page {
+                TripsScreen(
+                    vm = vm,
+                    onOpenTrip = { nav.navigate("trip/$it") },
+                    onNewTrip = { nav.navigate("trip_edit/0") },
+                )
+            }
         }
-        composable(
-            "profile",
-            enterTransition = { fadeIn(tween(300)) },
-            exitTransition = { fadeOut(tween(200)) },
-        ) {
-            ProfileScreen(
-                vm = vm,
-                onOpenPlace = { nav.navigate("place/$it") },
-                onAdd = { nav.navigate("place_edit/0") },
-                onOpenUnesco = { nav.navigate("unesco") },
-            )
+        composable("profile") {
+            Page {
+                ProfileScreen(
+                    vm = vm,
+                    onOpenPlace = { nav.navigate("place/$it") },
+                    onAdd = { nav.navigate("place_edit/0") },
+                    onOpenUnesco = { nav.navigate("unesco") },
+                )
+            }
         }
         composable("place/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
-            val id = e.arguments?.getLong("id") ?: 0L
-            PlaceDetailScreen(
-                vm = vm,
-                placeId = id,
-                onBack = { nav.popBackStack() },
-                onEdit = { nav.navigate("place_edit/$id") },
-                onOpenMedia = { index -> nav.navigate("viewer/$id/$index") },
-            )
+            Page {
+                val id = e.arguments?.getLong("id") ?: 0L
+                PlaceDetailScreen(
+                    vm = vm,
+                    placeId = id,
+                    onBack = { nav.popBackStack() },
+                    onEdit = { nav.navigate("place_edit/$id") },
+                    onOpenMedia = { index -> nav.navigate("viewer/$id/$index") },
+                )
+            }
         }
         composable("place_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
-            val id = e.arguments?.getLong("id") ?: 0L
-            PlaceEditScreen(
-                vm = vm,
-                placeId = id,
-                onBack = { nav.popBackStack() },
-                onPickLocation = { nav.navigate("picker/place") },
-                onSaved = { savedId ->
-                    nav.popBackStack()
-                    if (id == 0L) nav.navigate("place/$savedId")
-                },
-            )
+            Page {
+                val id = e.arguments?.getLong("id") ?: 0L
+                PlaceEditScreen(
+                    vm = vm,
+                    placeId = id,
+                    onBack = { nav.popBackStack() },
+                    onPickLocation = { nav.navigate("picker/place") },
+                    onSaved = { savedId ->
+                        nav.popBackStack()
+                        if (id == 0L) nav.navigate("place/$savedId")
+                    },
+                )
+            }
         }
         composable(
             "viewer/{id}/{index}",
@@ -214,54 +242,69 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                 navArgument("id") { type = NavType.LongType },
                 navArgument("index") { type = NavType.IntType },
             ),
-            enterTransition = { fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.9f) },
+            enterTransition = { fadeIn(tween(300)) + scaleIn(tween(NAV_MS, easing = Emphasized), initialScale = 0.9f) },
             popExitTransition = { fadeOut(tween(250)) + scaleOut(tween(250), targetScale = 0.9f) },
         ) { e ->
-            MediaViewerScreen(
-                vm = vm,
-                placeId = e.arguments?.getLong("id") ?: 0L,
-                startIndex = e.arguments?.getInt("index") ?: 0,
-                onBack = { nav.popBackStack() },
-            )
+            Page {
+                MediaViewerScreen(
+                    vm = vm,
+                    placeId = e.arguments?.getLong("id") ?: 0L,
+                    startIndex = e.arguments?.getInt("index") ?: 0,
+                    onBack = { nav.popBackStack() },
+                )
+            }
         }
         composable(
             "picker/{target}",
-            enterTransition = { slideInVertically(tween(420, easing = FastOutSlowInEasing)) { it } + fadeIn() },
-            popExitTransition = { slideOutVertically(tween(320)) { it } + fadeOut() },
+            enterTransition = { slideInVertically(tween(NAV_MS, easing = Emphasized)) { it } },
+            exitTransition = { navExit() },
+            popExitTransition = { slideOutVertically(tween(320, easing = Emphasized)) { it } },
         ) { e ->
-            LocationPickerScreen(
-                vm = vm,
-                target = e.arguments?.getString("target") ?: "place",
-                onDone = { nav.popBackStack() },
-            )
+            Page {
+                LocationPickerScreen(
+                    vm = vm,
+                    target = e.arguments?.getString("target") ?: "place",
+                    onDone = { nav.popBackStack() },
+                )
+            }
         }
         composable("trip/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
-            val id = e.arguments?.getLong("id") ?: 0L
-            TripDetailScreen(
-                vm = vm,
-                tripId = id,
-                onBack = { nav.popBackStack() },
-                onEdit = { nav.navigate("trip_edit/$id") },
-                onAddDestination = { nav.navigate("picker/$id") },
-                onCompleted = { albumId ->
-                    nav.popBackStack()
-                    nav.navigate("place/$albumId")
-                },
-            )
+            Page {
+                val id = e.arguments?.getLong("id") ?: 0L
+                TripDetailScreen(
+                    vm = vm,
+                    tripId = id,
+                    onBack = { nav.popBackStack() },
+                    onEdit = { nav.navigate("trip_edit/$id") },
+                    onAddDestination = { nav.navigate("picker/$id") },
+                    onCompleted = { albumId ->
+                        nav.popBackStack()
+                        nav.navigate("place/$albumId")
+                    },
+                )
+            }
         }
         composable("trip_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
-            val id = e.arguments?.getLong("id") ?: 0L
-            TripEditScreen(
-                vm = vm,
-                tripId = id,
-                onBack = { nav.popBackStack() },
-                onSaved = { savedId ->
-                    nav.popBackStack()
-                    if (id == 0L) nav.navigate("trip/$savedId")
-                },
-            )
+            Page {
+                val id = e.arguments?.getLong("id") ?: 0L
+                TripEditScreen(
+                    vm = vm,
+                    tripId = id,
+                    onBack = { nav.popBackStack() },
+                    onSaved = { savedId ->
+                        nav.popBackStack()
+                        if (id == 0L) nav.navigate("trip/$savedId")
+                    },
+                )
+            }
         }
     }
+}
+
+/** Fondo opaco per ogni pagina: durante lo scorrimento copre quella sotto (globo compreso). */
+@Composable
+private fun Page(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
 }
 
 @Composable

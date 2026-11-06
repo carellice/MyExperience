@@ -3,11 +3,21 @@ package com.myexperience.app.ui.screens
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -16,7 +26,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Luggage
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Favorite
@@ -57,6 +71,7 @@ import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.Forest
 import com.myexperience.app.ui.theme.Sea
 import com.myexperience.app.ui.theme.Terracotta
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Colori dei punti sul globo (allineati a GlobeView). */
@@ -159,6 +174,14 @@ fun HomeScreen(
     }
 
     var globeRef by remember { mutableStateOf<GlobeView?>(null) }
+    val focusManager = LocalFocusManager.current
+    // mappa stradale della città: si apre zoomando oltre il limite del globo
+    var cityMap by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    LaunchedEffect(cityMap, globeRef) {
+        // il globo non si vede sotto la mappa: niente rendering inutile
+        if (cityMap != null) globeRef?.onPause() else globeRef?.onResume()
+    }
+    BackHandler(cityMap != null) { cityMap = null }
 
     Box(Modifier.fillMaxSize().background(Color(0xFF02030A))) {
         AndroidView(
@@ -186,7 +209,11 @@ fun HomeScreen(
                     }
                     g.flyTo(m.lat, m.lon, true)
                 }
-                g.onEmptyTap = { selection = null }
+                g.onEmptyTap = {
+                    selection = null
+                    focusManager.clearFocus()
+                }
+                g.onZoomPastLimit = { lat, lon -> cityMap = lat to lon }
                 g.onLongPress = { lat, lon ->
                     val temp = PickedLocation(lat, lon, "…", "")
                     selection = GlobeSelection.NewSpot(temp, true)
@@ -205,7 +232,7 @@ fun HomeScreen(
             val obs = LifecycleEventObserver { _, e ->
                 when (e) {
                     Lifecycle.Event.ON_RESUME -> {
-                        g?.onResume()
+                        if (cityMap == null) g?.onResume()
                         resumed = true
                         locationGranted = hasLocationPermission(context)
                     }
@@ -263,6 +290,17 @@ fun HomeScreen(
                 }
                 if (settings.showUnesco) LegendDot(UnescoColor, "UNESCO")
             }
+            Spacer(Modifier.height(14.dp))
+            GlobeSearchBar(
+                search = vm::searchLocation,
+                onPick = { loc ->
+                    focusManager.clearFocus()
+                    // un paese si guarda da più lontano di una città
+                    val isCountry = loc.country.isNotBlank() && loc.name.equals(loc.country, ignoreCase = true)
+                    globeRef?.flyTo(loc.latitude, loc.longitude, zoomIn = true, close = !isCountry)
+                    selection = GlobeSelection.NewSpot(loc, false)
+                },
+            )
         }
 
         // pannello inferiore
@@ -296,7 +334,7 @@ fun HomeScreen(
                             HintCard(
                                 if (placeList.isEmpty())
                                     "Tieni premuto su un punto del globo per creare il tuo primo album di viaggio"
-                                else "Tocca un punto luminoso per aprire l'album · tieni premuto per aggiungere un ricordo"
+                                else "Tocca un punto per aprire l'album · zooma a fondo per la mappa della città"
                             )
                         } else Spacer(Modifier.height(1.dp))
                     }
@@ -390,7 +428,12 @@ fun HomeScreen(
                                 }
                                 Icon(
                                     Icons.Rounded.Close, "Annulla", tint = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.padding(end = 8.dp).size(22.dp).bounceClick { selection = null },
+                                    modifier = Modifier.padding(end = 10.dp).size(22.dp).bounceClick { selection = null },
+                                )
+                                Icon(
+                                    Icons.Rounded.Map, "Mappa della città", tint = Color.White,
+                                    modifier = Modifier.padding(end = 10.dp).size(24.dp)
+                                        .bounceClick { cityMap = s.loc.latitude to s.loc.longitude },
                                 )
                                 Box(
                                     Modifier
@@ -411,6 +454,42 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = cityMap != null,
+            enter = fadeIn(tween(350)) + scaleIn(tween(450, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)), initialScale = 0.7f),
+            exit = fadeOut(tween(300)) + scaleOut(tween(300), targetScale = 0.7f),
+        ) {
+            // ricorda l'ultimo punto anche durante l'animazione di chiusura
+            var last by remember { mutableStateOf(cityMap) }
+            if (cityMap != null) last = cityMap
+            Box(Modifier.fillMaxSize()) {
+                OsmMap(
+                    pins = placeList.flatMap { p -> p.route.map { MapPin(p.place.id, it.latitude, it.longitude, p.place.title) } },
+                    modifier = Modifier.fillMaxSize(),
+                    autoFit = false,
+                    focus = last,
+                    onPinClick = onOpenPlace,
+                )
+                Row(
+                    Modifier
+                        .statusBarsPadding()
+                        .padding(16.dp)
+                        .shadow(12.dp, RoundedCornerShape(50))
+                        .clip(RoundedCornerShape(50))
+                        .background(Color(0xE6121B1E))
+                        .bounceClick { cityMap = null }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Rounded.Public, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Torna al globo", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -585,6 +664,129 @@ private fun AlbumPreviewCard(
                 )
                 Spacer(Modifier.height(18.dp))
                 LikeButton(place.favorite, onLike, tintOff = Color.White)
+            }
+        }
+    }
+}
+
+/** Barra di ricerca in vetro sopra il globo: città, regioni e paesi. */
+@Composable
+private fun GlobeSearchBar(search: suspend (String) -> List<PickedLocation>, onPick: (PickedLocation) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<PickedLocation>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var searched by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(query) {
+        val q = query.trim()
+        searched = false
+        if (q.length < 2) {
+            results = emptyList()
+            return@LaunchedEffect
+        }
+        delay(400) // attende che si smetta di scrivere
+        loading = true
+        try {
+            results = search(q)
+            searched = true
+        } finally {
+            loading = false
+        }
+    }
+    val borderAlpha by animateFloatAsState(if (focused) 0.9f else 0.18f, tween(250), label = "border")
+    val pick = { loc: PickedLocation ->
+        onPick(loc)
+        query = ""
+    }
+
+    Column {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .shadow(if (focused) 18.dp else 6.dp, RoundedCornerShape(50), ambientColor = Sea, spotColor = Sea)
+                .clip(RoundedCornerShape(50))
+                .background(Brush.horizontalGradient(listOf(Color(0xCC14272B), Color(0xCC10201A))))
+                .border(
+                    1.dp,
+                    Brush.horizontalGradient(listOf(Sea.copy(alpha = borderAlpha), Forest.copy(alpha = borderAlpha))),
+                    RoundedCornerShape(50),
+                )
+                .padding(start = 6.dp, end = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(BrandBrush), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Search, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (query.isEmpty()) {
+                    Text(
+                        "Cerca una città, una regione o un paese", color = Color.White.copy(alpha = 0.55f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                    cursorBrush = SolidColor(Sea),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { results.firstOrNull()?.let(pick) }),
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+                )
+            }
+            when {
+                loading -> CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                query.isNotEmpty() -> Icon(
+                    Icons.Rounded.Close, "Cancella", tint = Color.White.copy(alpha = 0.75f),
+                    modifier = Modifier.size(22.dp).bounceClick { query = "" },
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = focused && (results.isNotEmpty() || searched),
+            enter = fadeIn() + expandVertically(spring(dampingRatio = 0.85f)),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column(
+                Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .shadow(20.dp, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xF0121B1E))
+                    .padding(vertical = 6.dp),
+            ) {
+                if (results.isEmpty()) {
+                    Text("Nessun luogo trovato", color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(16.dp))
+                }
+                results.forEach { loc ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .bounceClick { pick(loc) }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.Place, null, tint = VisitedColor, modifier = Modifier.size(20.dp)) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                flagPrefix(loc.country) + loc.name, color = Color.White,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            if (loc.country.isNotBlank() && !loc.country.equals(loc.name, ignoreCase = true)) {
+                                Text(loc.country, color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
