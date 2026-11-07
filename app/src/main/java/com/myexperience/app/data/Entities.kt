@@ -205,4 +205,5 @@ data class Profile(
     val name: String,
     val bio: String,
     val avatarPath: String?,
+    val coverPath: String? = null,
 )

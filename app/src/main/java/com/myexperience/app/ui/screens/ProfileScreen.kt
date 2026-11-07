@@ -34,6 +34,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +74,9 @@ fun ProfileScreen(
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) vm.setAvatar(uri)
+    }
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) vm.setProfileCover(uri)
     }
 
     val countries = remember(all) {
@@ -117,11 +122,36 @@ fun ProfileScreen(
                             )
                         ),
                 ) {
-                    Icon(
-                        Icons.Rounded.Public, null, tint = Color.White,
-                        modifier = Modifier.align(Alignment.CenterEnd).offset(x = 30.dp).size(160.dp)
-                            .graphicsLayer { alpha = 0.18f; rotationZ = shift * 30f },
-                    )
+                    val cover = profile.coverPath
+                    if (cover != null) {
+                        AsyncImage(
+                            model = java.io.File(cover), contentDescription = "Copertina",
+                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+                        )
+                        // velo in basso: l'avatar resta leggibile sopra la foto
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent, Color.Black.copy(alpha = 0.35f)))
+                            ),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Rounded.Public, null, tint = Color.White,
+                            modifier = Modifier.align(Alignment.CenterEnd).offset(x = 30.dp).size(160.dp)
+                                .graphicsLayer { alpha = 0.18f; rotationZ = shift * 30f },
+                        )
+                    }
+                    Row(
+                        Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)
+                            .clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f))
+                            .bounceClick { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.AddAPhoto, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Copertina", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
                 Column(Modifier.fillMaxWidth().padding(top = 128.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box {

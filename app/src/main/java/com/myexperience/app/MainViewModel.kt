@@ -172,4 +172,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.saveProfile(p)
         if (old != null) java.io.File(old).delete()
     }
+
+    fun setProfileCover(uri: Uri) = viewModelScope.launch {
+        val path = repo.importFile(uri) ?: return@launch
+        val old = _profile.value.coverPath
+        val p = _profile.value.copy(coverPath = path)
+        _profile.value = p
+        repo.saveProfile(p)
+        if (old != null) java.io.File(old).delete()
+    }
 }

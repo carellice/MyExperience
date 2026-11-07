@@ -342,6 +342,7 @@ class Repository(private val context: Context, db: AppDatabase) {
         name = prefs.getString("name", null) ?: "Viaggiatore",
         bio = prefs.getString("bio", null) ?: "Collezionista di tramonti e biglietti di sola andata",
         avatarPath = prefs.getString("avatar", null),
+        coverPath = prefs.getString("cover", null),
     )
 
     fun saveProfile(p: Profile) {
@@ -349,6 +350,7 @@ class Repository(private val context: Context, db: AppDatabase) {
             .putString("name", p.name)
             .putString("bio", p.bio)
             .putString("avatar", p.avatarPath)
+            .putString("cover", p.coverPath)
             .apply()
     }
 
