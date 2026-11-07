@@ -63,6 +63,16 @@ import com.myexperience.app.data.PickedLocation
 import com.myexperience.app.data.UNESCO_RADIUS_M
 import com.myexperience.app.data.UnescoSites
 import com.myexperience.app.data.distanceFrom
+import com.myexperience.app.data.distanceMeters
+import com.myexperience.app.data.PlaceWithMedia
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.globe.GlobeMarker
 import com.myexperience.app.ui.globe.GlobeSettings
@@ -75,8 +85,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Colori dei punti sul globo (allineati a GlobeView). */
-private val VisitedColor = Color(0xFFF0A26B)
-private val PlannedColor = Color(0xFF8FD3DE)
+private val VisitedColor = Color(0xFF4DC778)
+private val PlannedColor = Color(0xFFF0A26B)
 private val UnescoColor = Color(0xFFFFCC47)
 
 /** Id dei punti UNESCO sul globo: negativi e lontani da quelli delle mete. */
@@ -87,6 +97,48 @@ private sealed interface GlobeSelection {
     data class Trip(val tripId: Long, val destId: Long) : GlobeSelection
     data class NewSpot(val loc: PickedLocation, val resolving: Boolean) : GlobeSelection
     data class Unesco(val index: Int) : GlobeSelection
+    /** Luogo visitato più volte: si sceglie quale album aprire. */
+    data class Visits(val placeIds: List<Long>) : GlobeSelection
+}
+
+/** Album nello stesso luogo o città (entro [VISIT_CLUSTER_M]), dal più vecchio al più recente. */
+private data class VisitCluster(val lat: Double, val lon: Double, val placeIds: List<Long>)
+
+private const val VISIT_CLUSTER_M = 15_000.0
+
+private fun visitClusters(places: List<PlaceWithMedia>): List<VisitCluster> {
+    val clusters = mutableListOf<VisitCluster>()
+    places.sortedWith(compareBy({ it.place.startDate }, { it.place.id })).forEach { p ->
+        p.route.forEach { s ->
+            val i = clusters.indexOfFirst { distanceMeters(it.lat, it.lon, s.latitude, s.longitude) <= VISIT_CLUSTER_M }
+            if (i < 0) clusters += VisitCluster(s.latitude, s.longitude, listOf(p.place.id))
+            else if (p.place.id !in clusters[i].placeIds) clusters[i] = clusters[i].copy(placeIds = clusters[i].placeIds + p.place.id)
+        }
+    }
+    return clusters
+}
+
+/** Numero di visite dentro il punto verde, visibile solo zoomando sul globo. */
+@Composable
+private fun VisitCounts(globe: GlobeView?, clusters: List<VisitCluster>) {
+    var frame by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) { while (true) withFrameNanos { frame = it } }
+    val measurer = rememberTextMeasurer()
+    val style = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
+    Canvas(Modifier.fillMaxSize()) {
+        frame // ridisegna a ogni frame: il globo si muove
+        val g = globe ?: return@Canvas
+        if (!g.isZoomedIn()) return@Canvas
+        val r = 10.dp.toPx()
+        clusters.forEach { c ->
+            val (x, y) = g.screenPoint(c.lat, c.lon) ?: return@forEach
+            val at = Offset(x, y)
+            drawCircle(VisitedColor, r, at)
+            drawCircle(Color.White, r, at, style = Stroke(1.5.dp.toPx()))
+            val text = measurer.measure("${c.placeIds.size}", style)
+            drawText(text, topLeft = Offset(x - text.size.width / 2f, y - text.size.height / 2f))
+        }
+    }
 }
 
 /** Home: solo il globo 3D, a tutto schermo, senza scorrimento. */
@@ -149,6 +201,7 @@ fun HomeScreen(
     }
 
     val placeList = places.orEmpty()
+    val clusters = remember(places) { visitClusters(placeList) }
     val markers = remember(places, trips, selection, settings.showUnesco) {
         val list = mutableListOf<GlobeMarker>()
         // un punto per ogni tappa: le tappe di un album on the road si illuminano insieme
@@ -198,7 +251,11 @@ fun HomeScreen(
                 g.setSettings(settings)
                 g.onMarkerTap = { m ->
                     selection = when (m.kind) {
-                        0 -> GlobeSelection.Album(m.id)
+                        0 -> clusters
+                            .firstOrNull { c -> m.id in c.placeIds && distanceMeters(c.lat, c.lon, m.lat, m.lon) <= VISIT_CLUSTER_M }
+                            ?.takeIf { it.placeIds.size > 1 }
+                            ?.let { GlobeSelection.Visits(it.placeIds) }
+                            ?: GlobeSelection.Album(m.id)
                         1 -> {
                             val destId = -m.id
                             val trip = trips.orEmpty().firstOrNull { t -> t.destinations.any { it.id == destId } }
@@ -226,6 +283,9 @@ fun HomeScreen(
                 }
             },
         )
+
+        val repeated = remember(clusters) { clusters.filter { it.placeIds.size > 1 } }
+        if (repeated.isNotEmpty() && cityMap == null) VisitCounts(globeRef, repeated)
 
         DisposableEffect(lifecycle, globeRef) {
             val g = globeRef
@@ -323,6 +383,7 @@ fun HomeScreen(
                         is GlobeSelection.Trip -> "t${s.destId}"
                         is GlobeSelection.NewSpot -> "n"
                         is GlobeSelection.Unesco -> "u${s.index}"
+                        is GlobeSelection.Visits -> "v${s.placeIds}"
                         null -> "none"
                     }
                 },
@@ -372,6 +433,56 @@ fun HomeScreen(
                                         )
                                     }
                                     Text("Apri →", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    is GlobeSelection.Visits -> {
+                        val albums = s.placeIds.mapNotNull { id -> placeList.firstOrNull { it.place.id == id } }
+                        GlassPanel {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "VISITATO ${albums.size} VOLTE", color = VisitedColor,
+                                            fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+                                        )
+                                        Text(
+                                            albums.firstOrNull()?.let { flagPrefix(it.place.country) + it.place.locationName }.orEmpty(),
+                                            color = Color.White, style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    Icon(
+                                        Icons.Rounded.Close, "Chiudi", tint = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(22.dp).bounceClick { selection = null },
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                                    albums.forEach { p ->
+                                        Row(
+                                            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                                .bounceClick { onOpenPlace(p.place.id) }
+                                                .padding(vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            CoverImage(
+                                                p.place.coverPath, p.place.id,
+                                                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)),
+                                                icon = categoryIcon(p.place.category), iconSize = 20.dp,
+                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Column(Modifier.weight(1f)) {
+                                                Text(p.place.title, color = Color.White, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(
+                                                    formatRange(p.place.startDate, p.place.endDate),
+                                                    color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall,
+                                                )
+                                            }
+                                            Text("Apri →", color = Color.White, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -468,7 +579,7 @@ fun HomeScreen(
             if (cityMap != null) last = cityMap
             Box(Modifier.fillMaxSize()) {
                 OsmMap(
-                    pins = placeList.flatMap { p -> p.route.map { MapPin(p.place.id, it.latitude, it.longitude, p.place.title) } },
+                    pins = placeList.flatMap { p -> p.route.map { MapPin(p.place.id, it.latitude, it.longitude, p.place.title, color = VisitedColor.toArgb()) } },
                     modifier = Modifier.fillMaxSize(),
                     autoFit = false,
                     focus = last,

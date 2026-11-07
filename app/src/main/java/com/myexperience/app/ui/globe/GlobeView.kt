@@ -73,6 +73,12 @@ class GlobeView(context: Context, private val camera: FloatArray) : GLSurfaceVie
         renderer.setMarkers(markers, selectedId)
     }
 
+    /** Posizione sullo schermo (pixel) di un punto del globo, null se è sul lato nascosto. */
+    fun screenPoint(lat: Double, lon: Double): Pair<Float, Float>? = renderer.project(lat, lon)
+
+    /** Vero quando si è zoomato abbastanza da leggere i dettagli dei punti. */
+    fun isZoomedIn(): Boolean = renderer.isZoomedIn()
+
     /** close = avvicinati il più possibile (città), altrimenti zoom medio (paese). */
     fun flyTo(lat: Double, lon: Double, zoomIn: Boolean, close: Boolean = false) = renderer.flyTo(lat, lon, zoomIn, close)
 
@@ -318,6 +324,24 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         velPitch = 0f
         flying = true
         lastInteraction = SystemClock.uptimeMillis()
+    }
+
+    fun isZoomedIn() = dist < defaultDist * 0.62f
+
+    fun project(lat: Double, lon: Double): Pair<Float, Float>? {
+        val m = FloatArray(16)
+        val cam = FloatArray(3)
+        synchronized(lock) {
+            System.arraycopy(lastMvp, 0, m, 0, 16)
+            System.arraycopy(lastCamObj, 0, cam, 0, 3)
+        }
+        val p = latLonToXyz(lat, lon)
+        val facing = p[0] * (cam[0] - p[0]) + p[1] * (cam[1] - p[1]) + p[2] * (cam[2] - p[2])
+        if (facing <= 0f) return null
+        val out = FloatArray(4)
+        Matrix.multiplyMV(out, 0, m, 0, floatArrayOf(p[0] * 1.008f, p[1] * 1.008f, p[2] * 1.008f, 1f), 0)
+        if (out[3] <= 0f) return null
+        return (out[0] / out[3] + 1f) / 2f * viewW to (1f - out[1] / out[3]) / 2f * viewH
     }
 
     /** Marker più vicino al tocco (in pixel), solo se sul lato visibile. */
@@ -634,10 +658,10 @@ private class GlobeRenderer(private val context: Context, private val camera: Fl
         ordered.forEachIndexed { i, m ->
             val p = latLonToXyz(m.lat, m.lon)
             val c = when (m.kind) {
-                1 -> floatArrayOf(0.56f, 0.83f, 0.87f)   // in programma: azzurro cielo
+                1 -> floatArrayOf(0.94f, 0.64f, 0.42f)   // da visitare: terracotta
                 2 -> floatArrayOf(1f, 1f, 1f)            // nuovo punto
                 3 -> floatArrayOf(1f, 0.80f, 0.28f)      // patrimonio UNESCO: oro
-                else -> floatArrayOf(0.94f, 0.64f, 0.42f) // visitato: terracotta
+                else -> floatArrayOf(0.30f, 0.78f, 0.47f) // visitato: verde
             }
             val o = i * 8
             data[o] = p[0]; data[o + 1] = p[1]; data[o + 2] = p[2]
