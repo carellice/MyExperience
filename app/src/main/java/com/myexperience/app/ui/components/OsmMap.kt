@@ -53,41 +53,14 @@ data class MapPin(
     val color: Int = 0xFFC8693F.toInt(),
 )
 
-/** Tile standard OpenStreetMap: gratuite, nessuna API key. */
-private val OsmTiles = XYTileSource(
-    "OSM", 1, 19, 256, ".png",
-    arrayOf("https://tile.openstreetmap.org/"),
-    "© OpenStreetMap contributors",
+/** Tile CARTO in stile Google Maps (nessuna API key): Voyager di giorno, Dark Matter in tema scuro. */
+private fun cartoTiles(dark: Boolean) = XYTileSource(
+    if (dark) "CartoDark" else "CartoVoyager", 1, 19, 256, ".png",
+    arrayOf("a", "b", "c", "d").map {
+        "https://$it.basemaps.cartocdn.com/" + if (dark) "dark_all/" else "rastertiles/voyager/"
+    }.toTypedArray(),
+    "© OpenStreetMap contributors © CARTO",
 )
-
-/** Filtro per tema scuro: inverte e ruota la tinta, così l'acqua resta blu. */
-private fun darkTileFilter(): android.graphics.ColorMatrixColorFilter {
-    val invert = android.graphics.ColorMatrix(
-        floatArrayOf(
-            -1f, 0f, 0f, 0f, 255f,
-            0f, -1f, 0f, 0f, 255f,
-            0f, 0f, -1f, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f,
-        )
-    )
-    val hue = android.graphics.ColorMatrix().apply {
-        // rotazione di 180° della tinta (approssimata) per mantenere i colori naturali
-        val cos = -1f
-        val lumR = 0.213f; val lumG = 0.715f; val lumB = 0.072f
-        set(
-            floatArrayOf(
-                lumR + cos * (1 - lumR) + 0f, lumG + cos * (-lumG), lumB + cos * (-lumB), 0f, 0f,
-                lumR + cos * (-lumR), lumG + cos * (1 - lumG), lumB + cos * (-lumB), 0f, 0f,
-                lumR + cos * (-lumR), lumG + cos * (-lumG), lumB + cos * (1 - lumB), 0f, 0f,
-                0f, 0f, 0f, 1f, 0f,
-            )
-        )
-    }
-    val dim = android.graphics.ColorMatrix().apply { setScale(0.85f, 0.85f, 0.9f, 1f) }
-    invert.postConcat(hue)
-    invert.postConcat(dim)
-    return android.graphics.ColorMatrixColorFilter(invert)
-}
 
 /**
  * Mappa OpenStreetMap (nessuna API key necessaria).
@@ -116,8 +89,7 @@ fun OsmMap(
 
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(OsmTiles)
-            if (dark) overlayManager.tilesOverlay.setColorFilter(darkTileFilter())
+            setTileSource(cartoTiles(dark))
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             isTilesScaledToDpi = true
@@ -220,7 +192,7 @@ fun OsmMap(
             )
         }
         Text(
-            "© OpenStreetMap contributors",
+            "© OpenStreetMap contributors © CARTO",
             fontSize = 9.sp,
             color = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier
