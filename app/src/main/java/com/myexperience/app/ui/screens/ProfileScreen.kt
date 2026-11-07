@@ -274,7 +274,7 @@ fun ProfileScreen(
 
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
-                "Immagini della Terra: Solar System Scope (CC BY 4.0) · Mappe © OpenStreetMap contributors © CARTO",
+                "Immagini della Terra: Solar System Scope (CC BY 4.0) · Mappe © Esri, OpenStreetMap contributors",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,

@@ -34,7 +34,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.myexperience.app.ui.theme.LocalDarkTheme
 import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
@@ -53,14 +54,54 @@ data class MapPin(
     val color: Int = 0xFFC8693F.toInt(),
 )
 
-/** Tile CARTO in stile Google Maps (nessuna API key): Voyager di giorno, Dark Matter in tema scuro. */
-private fun cartoTiles(dark: Boolean) = XYTileSource(
-    if (dark) "CartoDark" else "CartoVoyager", 1, 19, 256, ".png",
-    arrayOf("a", "b", "c", "d").map {
-        "https://$it.basemaps.cartocdn.com/" + if (dark) "dark_all/" else "rastertiles/voyager/"
-    }.toTypedArray(),
-    "© OpenStreetMap contributors © CARTO",
+/** Tile Esri World Street Map, colori simili a Google Maps e nessuna API key (CARTO ora la richiede). */
+private val EsriStreets = object : OnlineTileSourceBase(
+    "EsriStreets", 1, 19, 256, "",
+    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/"),
+    "Tiles © Esri",
+) {
+    // Esri vuole z/y/x, osmdroid di default costruisce z/x/y
+    override fun getTileURLString(index: Long) =
+        baseUrl + MapTileIndex.getZoom(index) + "/" + MapTileIndex.getY(index) + "/" + MapTileIndex.getX(index)
+}
+
+/** Esri Canvas scura (senza API key): fondo e nomi su due livelli, fino allo zoom 16 (oltre si ingrandisce). */
+private fun esriCanvas(layer: String) = object : OnlineTileSourceBase(
+    "EsriDark$layer", 1, 16, 256, "",
+    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_$layer/MapServer/tile/"),
+    "Tiles © Esri",
+) {
+    override fun getTileURLString(index: Long) =
+        baseUrl + MapTileIndex.getZoom(index) + "/" + MapTileIndex.getY(index) + "/" + MapTileIndex.getX(index)
+}
+
+/** Tinta blu notte sul fondo grigio di Esri, come il tema scuro di Google Maps. */
+private fun nightTint() = android.graphics.ColorMatrixColorFilter(
+    floatArrayOf(
+        0.72f, 0f, 0f, 0f, -4f,
+        0f, 0.84f, 0f, 0f, 4f,
+        0f, 0f, 1.08f, 0f, 16f,
+        0f, 0f, 0f, 1f, 0f,
+    )
 )
+
+/** Mappa in stile Google Maps senza API key: Esri stradale di giorno, Esri scura con i nomi in tema scuro. */
+private fun MapView.useGoogleLikeTiles(dark: Boolean) {
+    if (!dark) {
+        setTileSource(EsriStreets)
+        return
+    }
+    setTileSource(esriCanvas("Base"))
+    overlayManager.tilesOverlay.setColorFilter(nightTint())
+    val labels = org.osmdroid.views.overlay.TilesOverlay(
+        org.osmdroid.tileprovider.MapTileProviderBasic(context, esriCanvas("Reference")), context,
+    ).apply {
+        loadingBackgroundColor = android.graphics.Color.TRANSPARENT
+        loadingLineColor = android.graphics.Color.TRANSPARENT
+    }
+    overlays.add(0, labels) // sotto i pin
+}
+
 
 /**
  * Mappa OpenStreetMap (nessuna API key necessaria).
@@ -89,7 +130,7 @@ fun OsmMap(
 
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(cartoTiles(dark))
+            useGoogleLikeTiles(dark)
             setMultiTouchControls(true)
             zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
             isTilesScaledToDpi = true
@@ -192,7 +233,7 @@ fun OsmMap(
             )
         }
         Text(
-            "© OpenStreetMap contributors © CARTO",
+            "© Esri · © OpenStreetMap contributors",
             fontSize = 9.sp,
             color = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier
