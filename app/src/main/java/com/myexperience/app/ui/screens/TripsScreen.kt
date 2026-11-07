@@ -135,6 +135,12 @@ fun TripCard(t: TripWithDetails, modifier: Modifier = Modifier, onClick: () -> U
                 GlassChip(countdownLabel(t.trip.startDate, t.trip.endDate), icon = Icons.Rounded.HourglassTop)
                 Spacer(Modifier.width(8.dp))
                 if (t.destinations.isNotEmpty()) GlassChip("${t.destinations.size}", icon = Icons.Rounded.Place)
+                // bandiere dei paesi da visitare, come negli album
+                val flags = t.destinations.map { countryFlag(it.country) }.filter { it.isNotEmpty() }.distinct().take(4)
+                if (flags.isNotEmpty()) {
+                    Spacer(Modifier.width(8.dp))
+                    FlagsChip(flags)
+                }
             }
             Spacer(Modifier.height(14.dp))
             Text(

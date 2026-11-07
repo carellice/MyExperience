@@ -132,6 +132,8 @@ fun TripDetailScreen(
                                 val days = daysBetween(trip.startDate, trip.endDate ?: trip.startDate)
                                 GlassChip("$days giorni", icon = Icons.Rounded.CalendarMonth)
                             }
+                            val flags = d.destinations.map { countryFlag(it.country) }.filter { it.isNotEmpty() }.distinct().take(4)
+                            if (flags.isNotEmpty()) FlagsChip(flags)
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -471,7 +473,7 @@ private fun TimelineItem(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(dest.name, style = MaterialTheme.typography.titleMedium)
+                    Text(flagPrefix(dest.country) + dest.name, style = MaterialTheme.typography.titleMedium)
                     if (dest.country.isNotBlank()) {
                         Text(dest.country, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
