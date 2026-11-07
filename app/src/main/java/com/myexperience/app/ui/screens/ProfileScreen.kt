@@ -45,7 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.PlaceWithMedia
-import com.myexperience.app.data.UnescoSites
+import com.myexperience.app.data.BadgeCollection
+import com.myexperience.app.data.BadgeCollections
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.journal.themeById
 import com.myexperience.app.ui.theme.BrandBrush
@@ -63,7 +64,7 @@ fun ProfileScreen(
     vm: MainViewModel,
     onOpenPlace: (Long) -> Unit,
     onAdd: () -> Unit,
-    onOpenUnesco: () -> Unit,
+    onOpenCollection: (String) -> Unit,
 ) {
     val places by vm.places.collectAsStateWithLifecycle()
     val badges by vm.badges.collectAsStateWithLifecycle()
@@ -196,7 +197,12 @@ fun ProfileScreen(
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
-            BadgeCollection(badges, onOpenUnesco)
+            SectionTitle("Collezioni", Modifier.padding(top = 4.dp).offset(x = (-20).dp))
+        }
+        BadgeCollections.forEach { collection ->
+            item(span = { GridItemSpan(maxLineSpan) }, key = "c${collection.id}") {
+                BadgeCollectionCard(collection, badges) { onOpenCollection(collection.id) }
+            }
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -295,11 +301,12 @@ fun ProfileScreen(
     }
 }
 
-/** Collezione dei bollini UNESCO: avanzamento e ultimi raccolti. */
+/** Una collezione di bollini: avanzamento e ultimi raccolti. */
 @Composable
-private fun BadgeCollection(badges: Map<String, Long>, onOpen: () -> Unit) {
-    val total = UnescoSites.size
-    val collected = UnescoSites.filter { it.id in badges }.sortedByDescending { badges[it.id] }
+private fun BadgeCollectionCard(collection: BadgeCollection, badges: Map<String, Long>, onOpen: () -> Unit) {
+    val sites = collection.items
+    val total = sites.size
+    val collected = sites.filter { it.id in badges }.sortedByDescending { badges[it.id] }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface)
             .bounceClick(onClick = onOpen).padding(16.dp),
@@ -307,7 +314,7 @@ private fun BadgeCollection(badges: Map<String, Long>, onOpen: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.WorkspacePremium, null, tint = Color(0xFFD9A63E))
             Spacer(Modifier.width(8.dp))
-            Text("Bollini UNESCO", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(collection.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Text("${collected.size}/$total", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
             Spacer(Modifier.width(4.dp))
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -322,13 +329,13 @@ private fun BadgeCollection(badges: Map<String, Long>, onOpen: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         if (collected.isEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                UnescoSites.take(3).forEach {
+                sites.take(3).forEach {
                     UnescoBadge(it, false, 52.dp)
                     Spacer(Modifier.width(6.dp))
                 }
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "Visita un patrimonio dell'umanità per raccogliere il primo bollino",
+                    "Visita un luogo della collezione e incolla una tua foto per il primo bollino",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

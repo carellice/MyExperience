@@ -7,7 +7,11 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
 import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -31,6 +35,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.myexperience.app.data.UnescoSite
+import com.myexperience.app.data.collectionOf
 import com.myexperience.app.ui.theme.BrandBrush
 import kotlinx.coroutines.delay
 
@@ -65,10 +70,24 @@ fun rememberDeviceLocation(enabled: Boolean): State<Location?> {
     return state
 }
 
-/** Pop-up che propone di raccogliere il bollino di un patrimonio UNESCO vicino. */
+/** Selettore di una foto da incollare su un bollino. */
 @Composable
-fun CollectBadgeDialog(site: UnescoSite, onCollect: () -> Unit, onLater: () -> Unit) {
+fun rememberBadgePhotoPicker(onPicked: (Uri) -> Unit): () -> Unit {
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onPicked(uri)
+    }
+    return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+}
+
+/**
+ * Pop-up che propone di raccogliere il bollino di un patrimonio vicino.
+ * Il bollino si raccoglie solo incollando una propria foto, per testimonianza e per la collezione.
+ */
+@Composable
+fun CollectBadgeDialog(site: UnescoSite, onCollect: (Uri) -> Unit, onLater: () -> Unit) {
     var collected by remember { mutableStateOf(false) }
+    var photo by remember { mutableStateOf<Uri?>(null) }
+    val pick = rememberBadgePhotoPicker { photo = it; collected = true }
     val appear = remember { Animatable(0f) }
     val flip = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow)) }
@@ -76,7 +95,7 @@ fun CollectBadgeDialog(site: UnescoSite, onCollect: () -> Unit, onLater: () -> U
         if (collected) {
             flip.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
             delay(1400)
-            onCollect()
+            photo?.let(onCollect)
         }
     }
     val glow = rememberInfiniteTransition(label = "glow")
@@ -94,7 +113,7 @@ fun CollectBadgeDialog(site: UnescoSite, onCollect: () -> Unit, onLater: () -> U
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                if (collected) "BOLLINO RACCOLTO" else "PATRIMONIO UNESCO QUI VICINO",
+                if (collected) "BOLLINO RACCOLTO" else "${collectionOf(site).kind.uppercase()} QUI VICINO",
                 color = Color(0xFFF7DC8A), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp,
             )
             Spacer(Modifier.height(18.dp))
@@ -107,7 +126,7 @@ fun CollectBadgeDialog(site: UnescoSite, onCollect: () -> Unit, onLater: () -> U
                 },
             ) {
                 // durante la rotazione il bollino si "colora"
-                UnescoBadge(site, collected = flip.value > 0.5f, size = 170.dp)
+                UnescoBadge(site, collected = flip.value > 0.5f, size = 170.dp, visited = true)
             }
             Spacer(Modifier.height(18.dp))
             Text(
@@ -115,28 +134,28 @@ fun CollectBadgeDialog(site: UnescoSite, onCollect: () -> Unit, onLater: () -> U
                 textAlign = TextAlign.Center,
             )
             Text(
-                "${site.region} · patrimonio dal ${site.year}",
+                "${site.region} · dal ${site.year}",
                 color = Color.White.copy(alpha = 0.65f), style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(20.dp))
             if (collected) {
-                Text("Aggiunto alla tua collezione nel profilo", color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+                Text("Foto incollata: bollino aggiunto alla tua collezione", color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
             } else {
                 Text(
-                    "Sei a meno di 200 m da questo patrimonio dell'umanità. Raccogli il suo bollino!",
+                    "Sei a meno di 200 m da qui. Incolla una tua foto alla collezione per raccogliere il bollino!",
                     color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(20.dp))
                 Box(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(BrandBrush)
-                        .bounceClick { collected = true }.padding(vertical = 14.dp),
+                        .bounceClick(onClick = pick).padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
-                ) { Text("Raccogli il bollino", color = Color.White, fontWeight = FontWeight.Bold) }
+                ) { Text("Incolla la foto e raccogli", color = Color.White, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Più tardi", color = Color.White.copy(alpha = 0.6f),
+                    "Più tardi: il passaggio resta segnato", color = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.clip(RoundedCornerShape(12.dp)).bounceClick(onClick = onLater).padding(10.dp),
                 )
             }

@@ -181,13 +181,13 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                         vm.setPicked(loc)
                         nav.navigate("place_edit/0")
                     },
-                    onOpenUnesco = { nav.navigate("unesco") },
+                    onOpenUnesco = { nav.navigate("collection/unesco") },
                 )
             }
         }
-        composable("unesco") {
+        composable("collection/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { e ->
             Page {
-                UnescoScreen(vm = vm, onBack = { nav.popBackStack() })
+                UnescoScreen(vm = vm, collectionId = e.arguments?.getString("id") ?: "unesco", onBack = { nav.popBackStack() })
             }
         }
         composable("trips") {
@@ -205,7 +205,7 @@ private fun AppNavHost(nav: NavHostController, vm: MainViewModel) {
                     vm = vm,
                     onOpenPlace = { nav.navigate("place/$it") },
                     onAdd = { nav.navigate("place_edit/0") },
-                    onOpenUnesco = { nav.navigate("unesco") },
+                    onOpenCollection = { nav.navigate("collection/$it") },
                 )
             }
         }

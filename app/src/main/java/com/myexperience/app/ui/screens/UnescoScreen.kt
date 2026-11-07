@@ -1,11 +1,14 @@
 package com.myexperience.app.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -17,38 +20,50 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.myexperience.app.MainViewModel
+import com.myexperience.app.data.BadgeCollections
 import com.myexperience.app.data.UnescoSite
-import com.myexperience.app.data.UnescoSites
 import com.myexperience.app.data.distanceFrom
 import com.myexperience.app.ui.components.*
 import com.myexperience.app.ui.theme.BrandBrush
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Elenco dei patrimoni UNESCO mappati (per ora solo in Italia) con i bollini raccolti. */
+/** Una collezione di bollini (patrimoni UNESCO, musei…): raccolti, da completare con la foto, da scoprire. */
 @Composable
-fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun UnescoScreen(vm: MainViewModel, collectionId: String, onBack: () -> Unit) {
+    val collection = BadgeCollections.firstOrNull { it.id == collectionId } ?: BadgeCollections.first()
+    val sites = collection.items
     val badges by vm.badges.collectAsStateWithLifecycle()
+    val photos by vm.badgePhotos.collectAsStateWithLifecycle()
+    val seen by vm.seenBadges.collectAsStateWithLifecycle()
+    val fromAlbums by vm.albumBadges.collectAsStateWithLifecycle()
+    val places by vm.places.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val location by rememberDeviceLocation(hasLocationPermission(context))
-    var filter by rememberSaveable { mutableIntStateOf(0) } // 0 tutti, 1 raccolti, 2 da scoprire
+    var filter by rememberSaveable { mutableIntStateOf(0) } // 0 tutti, 1 raccolti, 2 da completare, 3 da scoprire
     var query by rememberSaveable { mutableStateOf("") }
     var detail by remember { mutableStateOf<UnescoSite?>(null) }
 
-    val shown = remember(badges, filter, query, location) {
-        UnescoSites
+    fun visited(id: String) = id !in badges && (id in seen || id in fromAlbums)
+
+    val shown = remember(badges, seen, fromAlbums, filter, query, location) {
+        sites
             .filter {
                 when (filter) {
                     1 -> it.id in badges
-                    2 -> it.id !in badges
+                    2 -> visited(it.id)
+                    3 -> it.id !in badges && !visited(it.id)
                     else -> true
                 }
             }
@@ -58,8 +73,9 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
                 if (loc != null) list.sortedBy { it.distanceFrom(loc.latitude, loc.longitude) } else list.sortedBy { it.name }
             }
     }
-    val total = UnescoSites.size
-    val got = UnescoSites.count { it.id in badges }
+    val total = sites.size
+    val got = sites.count { it.id in badges }
+    val toPaste = sites.count { visited(it.id) }
 
     LazyColumn(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -68,11 +84,8 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
         item {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro") }
-                Text("Patrimoni UNESCO", style = MaterialTheme.typography.headlineMedium.copy(brush = BrandBrush), fontWeight = FontWeight.Black)
-                Text(
-                    "Italia · avvicinati a meno di 200 m da un patrimonio per raccoglierne il bollino",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text(collection.title, style = MaterialTheme.typography.headlineMedium.copy(brush = BrandBrush), fontWeight = FontWeight.Black)
+                Text(collection.subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("$got", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
@@ -88,7 +101,7 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     query, { query = it },
-                    placeholder = { Text("Cerca per nome o regione") },
+                    placeholder = { Text("Cerca per nome o luogo") },
                     leadingIcon = { Icon(Icons.Rounded.Search, null) },
                     singleLine = true, shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth(),
@@ -97,15 +110,16 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { SelectChip("Tutti · $total", filter == 0) { filter = 0 } }
                     item { SelectChip("Raccolti · $got", filter == 1) { filter = 1 } }
-                    item { SelectChip("Da scoprire · ${total - got}", filter == 2) { filter = 2 } }
+                    if (toPaste > 0) item { SelectChip("Manca la foto · $toPaste", filter == 2) { filter = 2 } }
+                    item { SelectChip("Da scoprire · ${total - got - toPaste}", filter == 3) { filter = 3 } }
                 }
             }
         }
         if (shown.isEmpty()) {
             item {
                 Text(
-                    if (filter == 1) "Nessun bollino ancora: visita un patrimonio UNESCO per iniziare la collezione."
-                    else "Nessun patrimonio trovato.",
+                    if (filter == 1) "Nessun bollino ancora: visita un luogo della collezione e incolla una tua foto per iniziare."
+                    else "Nessun elemento trovato.",
                     textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(32.dp),
                 )
@@ -113,6 +127,7 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
         }
         items(shown, key = { it.id }) { site ->
             val at = badges[site.id]
+            val wasHere = visited(site.id)
             Row(
                 Modifier
                     .animateItem()
@@ -124,7 +139,7 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                UnescoBadge(site, at != null, 64.dp)
+                UnescoBadge(site, at != null, 64.dp, visited = wasHere)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(site.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -135,14 +150,15 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
                     )
                     val sub = when {
                         at != null -> "Raccolto il ${formatDay(at)}"
+                        wasHere -> "Ci sei passato · incolla la foto"
                         location != null -> "A " + formatDistance(site.distanceFrom(location!!.latitude, location!!.longitude))
                         else -> null
                     }
                     if (sub != null) {
                         Text(
                             sub, style = MaterialTheme.typography.labelMedium,
-                            color = if (at != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (at != null) FontWeight.Bold else FontWeight.Normal,
+                            color = if (at != null || wasHere) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (at != null || wasHere) FontWeight.Bold else FontWeight.Normal,
                         )
                     }
                 }
@@ -152,29 +168,121 @@ fun UnescoScreen(vm: MainViewModel, onBack: () -> Unit) {
     }
 
     detail?.let { site ->
-        val at = badges[site.id]
+        val albumId = fromAlbums[site.id]
+        val album = places.orEmpty().firstOrNull { it.place.id == albumId }
+        BadgeDetailDialog(
+            site = site,
+            collectedAt = badges[site.id],
+            photo = photos[site.id],
+            seenAt = seen[site.id],
+            albumTitle = album?.place?.title,
+            albumPhotos = album?.media?.filter { !it.isVideo }?.map { it.path }.orEmpty(),
+            onPaste = { uri -> vm.collectBadge(site.id, uri) },
+            onUnstick = { vm.unstickBadge(site.id) },
+            onDismiss = { detail = null },
+        )
+    }
+}
+
+/**
+ * Scheda di un bollino. Raccolto: la foto con il bollino come timbro, e si può scollare.
+ * Visitato (posizione, album o bollino scollato): si incolla la foto, anche da quelle dell'album.
+ * Mai visto: si può raccogliere lo stesso se ci sei stato in passato, incollando una tua foto.
+ */
+@Composable
+private fun BadgeDetailDialog(
+    site: UnescoSite,
+    collectedAt: Long?,
+    photo: String?,
+    seenAt: Long?,
+    albumTitle: String?,
+    albumPhotos: List<String>,
+    onPaste: (Uri) -> Unit,
+    onUnstick: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var confirmUnstick by remember { mutableStateOf(false) }
+    val pick = rememberBadgePhotoPicker { onPaste(it); onDismiss() }
+    val collected = collectedAt != null && photo != null
+    val visited = !collected && (seenAt != null || albumTitle != null)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Chiudi") } },
+        dismissButton = if (collected) {
+            { TextButton(onClick = { confirmUnstick = true }) { Text("Scolla il bollino", color = MaterialTheme.colorScheme.error) } }
+        } else null,
+        text = {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (collected) {
+                    StampedPhoto(site, photo!!, Modifier.padding(bottom = 12.dp))
+                } else {
+                    UnescoBadge(site, false, 180.dp, visited = visited)
+                }
+                Spacer(Modifier.height(16.dp))
+                Text(site.name, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                Text(
+                    "${site.region} · " + if (site.label == "UNESCO") "patrimonio ${if (site.natural) "naturale" else "culturale"} dal ${site.year}" else "aperto dal ${site.year}",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    when {
+                        collected -> "Bollino raccolto il ${formatDay(collectedAt!!)}"
+                        seenAt != null -> "Ci sei passato il ${formatDay(seenAt)}: incolla una tua foto per raccogliere il bollino"
+                        albumTitle != null -> "Ci sei stato nell'album «$albumTitle»: incolla una foto per raccogliere il bollino"
+                        else -> "Bollino da scoprire: ${site.points.size} ${if (site.points.size == 1) "punto" else "punti"} di raccolta"
+                    },
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    color = if (collected || visited) MaterialTheme.colorScheme.primary else Color.Gray,
+                )
+                if (!collected) {
+                    if (albumPhotos.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Scegli una foto dell'album", style = MaterialTheme.typography.labelLarge)
+                        Spacer(Modifier.height(6.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(albumPhotos) { path ->
+                                AsyncImage(
+                                    model = File(path), contentDescription = null, contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))
+                                        .bounceClick { onPaste(Uri.fromFile(File(path))); onDismiss() },
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(BrandBrush)
+                            .bounceClick(onClick = pick).padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (visited) "Incolla una foto dalla galleria" else "Ci sono stato in passato: incolla una foto",
+                            color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+        },
+    )
+
+    if (confirmUnstick) {
         AlertDialog(
-            onDismissRequest = { detail = null },
-            confirmButton = { TextButton(onClick = { detail = null }) { Text("Chiudi") } },
+            onDismissRequest = { confirmUnstick = false },
+            title = { Text("Scollare il bollino?") },
             text = {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    UnescoBadge(site, at != null, 180.dp)
-                    Spacer(Modifier.height(16.dp))
-                    Text(site.name, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-                    Text(
-                        "${site.region} · patrimonio ${if (site.natural) "naturale" else "culturale"} dal ${site.year}",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        if (at != null) "Bollino raccolto il ${formatDay(at)}"
-                        else "Bollino da scoprire: ${site.points.size} ${if (site.points.size == 1) "punto" else "punti"} di raccolta",
-                        fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                        color = if (at != null) MaterialTheme.colorScheme.primary else Color.Gray,
-                    )
+                Text("La foto viene tolta dalla collezione. Il passaggio resta segnato: potrai riattaccare il bollino con un'altra foto quando vuoi.")
+            },
+            confirmButton = {
+                TextButton(onClick = { onUnstick(); confirmUnstick = false; onDismiss() }) {
+                    Text("Scolla", color = MaterialTheme.colorScheme.error)
                 }
             },
+            dismissButton = { TextButton(onClick = { confirmUnstick = false }) { Text("Annulla") } },
         )
     }
 }

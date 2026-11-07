@@ -62,6 +62,7 @@ import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.PickedLocation
 import com.myexperience.app.data.UNESCO_RADIUS_M
 import com.myexperience.app.data.UnescoSites
+import com.myexperience.app.data.AllBadgeSites
 import com.myexperience.app.data.distanceFrom
 import com.myexperience.app.data.distanceMeters
 import com.myexperience.app.data.PlaceWithMedia
@@ -154,6 +155,8 @@ fun HomeScreen(
     val trips by vm.trips.collectAsStateWithLifecycle()
     val settings by vm.globeSettings.collectAsStateWithLifecycle()
     val badges by vm.badges.collectAsStateWithLifecycle()
+    val seenBadges by vm.seenBadges.collectAsStateWithLifecycle()
+    val albumBadges by vm.albumBadges.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var selection by remember { mutableStateOf<GlobeSelection?>(null) }
@@ -194,7 +197,7 @@ fun HomeScreen(
     LaunchedEffect(location, badges) {
         val loc = location ?: return@LaunchedEffect
         if (nearSiteId != null || loc.accuracy > 200f) return@LaunchedEffect
-        nearSiteId = UnescoSites.firstOrNull { site ->
+        nearSiteId = AllBadgeSites.firstOrNull { site ->
             site.id !in badges && site.id !in vm.postponedBadges &&
                 site.distanceFrom(loc.latitude, loc.longitude) <= UNESCO_RADIUS_M
         }?.id
@@ -491,9 +494,10 @@ fun HomeScreen(
                         val site = UnescoSites.getOrNull(s.index)
                         if (site != null) {
                             val got = site.id in badges
+                            val visited = site.id in seenBadges || site.id in albumBadges
                             GlassPanel(onClick = onOpenUnesco) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    UnescoBadge(site, got, 64.dp)
+                                    UnescoBadge(site, got, 64.dp, visited = visited)
                                     Spacer(Modifier.width(14.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text("PATRIMONIO UNESCO · ${site.year}", color = UnescoColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -502,7 +506,11 @@ fun HomeScreen(
                                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                                         )
                                         Text(
-                                            if (got) "Bollino raccolto" else "Avvicinati a meno di 200 m per raccogliere il bollino",
+                                            when {
+                                                got -> "Bollino raccolto"
+                                                visited -> "Ci sei passato: incolla una foto per raccoglierlo"
+                                                else -> "Avvicinati a meno di 200 m per raccogliere il bollino"
+                                            },
                                             color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
@@ -611,11 +619,13 @@ fun HomeScreen(
     }
 
     nearSiteId?.let { id ->
-        UnescoSites.firstOrNull { it.id == id }?.let { site ->
+        AllBadgeSites.firstOrNull { it.id == id }?.let { site ->
+            // sei passato di qui: anche senza foto il sito resta riconosciuto
+            LaunchedEffect(site.id) { vm.markSeen(site.id) }
             CollectBadgeDialog(
                 site,
-                onCollect = {
-                    vm.collectBadge(site.id)
+                onCollect = { photo ->
+                    vm.collectBadge(site.id, photo)
                     nearSiteId = null
                 },
                 onLater = {

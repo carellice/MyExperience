@@ -337,6 +337,37 @@ class Repository(private val context: Context, db: AppDatabase) {
 
     fun saveBadge(id: String, at: Long) = badgePrefs.edit().putLong(id, at).apply()
 
+    /** Foto personale incollata su ogni bollino raccolto: id del sito -> percorso. */
+    private val badgePhotoPrefs = context.getSharedPreferences("badge_photos", Context.MODE_PRIVATE)
+    /** Siti dove sei passato senza (ancora) incollare la foto: id -> quando. */
+    private val badgeSeenPrefs = context.getSharedPreferences("badge_seen", Context.MODE_PRIVATE)
+
+    fun loadBadgePhotos(): Map<String, String> =
+        badgePhotoPrefs.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()
+
+    fun loadSeenBadges(): Map<String, Long> =
+        badgeSeenPrefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap()
+
+    fun saveBadgePhoto(id: String, path: String) = badgePhotoPrefs.edit().putString(id, path).apply()
+    fun saveSeen(id: String, at: Long) = badgeSeenPrefs.edit().putLong(id, at).apply()
+    fun removeSeen(id: String) = badgeSeenPrefs.edit().remove(id).apply()
+
+    /** Scolla il bollino: via la raccolta e la foto, resta il passaggio. */
+    fun removeBadge(id: String) {
+        badgePhotoPrefs.getString(id, null)?.let { File(it).delete() }
+        badgePhotoPrefs.edit().remove(id).apply()
+        badgePrefs.edit().remove(id).apply()
+    }
+
+    /** Un bollino raccolto vale solo con la foto: quelli raccolti prima restano "ci sei passato". */
+    fun migrateBadgesWithoutPhoto() {
+        val photos = loadBadgePhotos()
+        loadBadges().filterKeys { it !in photos }.forEach { (id, at) ->
+            saveSeen(id, at)
+            badgePrefs.edit().remove(id).apply()
+        }
+    }
+
     // ---------- Profilo ----------
     fun loadProfile() = Profile(
         name = prefs.getString("name", null) ?: "Viaggiatore",

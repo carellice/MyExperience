@@ -18,6 +18,10 @@ data class UnescoSite(
     val natural: Boolean,
     val icon: String,
     val points: List<Pair<Double, Double>>,
+    /** Scritta sul bollino. */
+    val label: String = "UNESCO",
+    /** Posizione nella collezione: decide l'aspetto unico del bollino. */
+    val order: Int = 0,
 ) {
     val lat get() = points[0].first
     val lon get() = points[0].second
@@ -25,6 +29,22 @@ data class UnescoSite(
 
 /** Raggio entro cui si può raccogliere il bollino. */
 const val UNESCO_RADIUS_M = 200.0
+
+/** Un album con una tappa entro questa distanza da un sito lo fa riconoscere come visitato. */
+const val ALBUM_BADGE_RADIUS_M = 2_000.0
+
+/** Siti visti negli album: id del sito -> id del primo album (in ordine di data) che ci passa. */
+fun sitesInAlbums(sites: List<UnescoSite>, places: List<PlaceWithMedia>): Map<String, Long> {
+    val out = linkedMapOf<String, Long>()
+    places.sortedBy { it.place.startDate }.forEach { p ->
+        p.route.forEach { s ->
+            sites.forEach { site ->
+                if (site.id !in out && site.distanceFrom(s.latitude, s.longitude) <= ALBUM_BADGE_RADIUS_M) out[site.id] = p.place.id
+            }
+        }
+    }
+    return out
+}
 
 /** Distanza in metri tra due coordinate (formula dell'emisenoverso). */
 fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -191,4 +211,4 @@ val UnescoSites: List<UnescoSite> = listOf(
         41.2650 to 13.5940, 41.0850 to 14.2510, 41.1320 to 14.7820, 40.6405 to 17.9440),
     site("domus_janas", "Domus de Janas, arte e architettura funeraria della Sardegna", "Sardegna", 2025, "tomb",
         40.6340 to 8.3350, 39.1220 to 8.6800, 40.4500 to 8.7720, 40.8060 to 8.4180, 39.5850 to 9.3330),
-)
+).mapIndexed { i, s -> s.copy(order = i) }

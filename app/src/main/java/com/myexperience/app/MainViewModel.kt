@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import com.myexperience.app.data.AllBadgeSites
+import com.myexperience.app.data.sitesInAlbums
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -98,18 +101,54 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- bollini UNESCO ----
-    private val _badges = MutableStateFlow(repo.loadBadges())
+    /** Bollini raccolti (sempre con la foto): id del sito -> momento della raccolta. */
+    private val _badges = MutableStateFlow(repo.run { migrateBadgesWithoutPhoto(); loadBadges() })
     val badges: StateFlow<Map<String, Long>> = _badges.asStateFlow()
+
+    private val _badgePhotos = MutableStateFlow(repo.loadBadgePhotos())
+    val badgePhotos: StateFlow<Map<String, String>> = _badgePhotos.asStateFlow()
+
+    /** Siti dove sei passato (posizione o bollino scollato) senza foto incollata. */
+    private val _seenBadges = MutableStateFlow(repo.loadSeenBadges())
+    val seenBadges: StateFlow<Map<String, Long>> = _seenBadges.asStateFlow()
+
+    /** Siti riconosciuti dagli album: id del sito -> id dell'album. */
+    val albumBadges: StateFlow<Map<String, Long>> =
+        repo.places.map { sitesInAlbums(AllBadgeSites, it) }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    fun markSeen(id: String) {
+        if (id in _badges.value || id in _seenBadges.value) return
+        val now = System.currentTimeMillis()
+        repo.saveSeen(id, now)
+        _seenBadges.value = _seenBadges.value + (id to now)
+    }
+
+    /** Raccoglie il bollino incollando la foto scelta (copiata nella memoria dell'app). */
+    fun collectBadge(id: String, photo: Uri) = viewModelScope.launch {
+        val path = repo.importFile(photo) ?: return@launch
+        _badgePhotos.value[id]?.let { java.io.File(it).delete() }
+        val now = System.currentTimeMillis()
+        repo.saveBadgePhoto(id, path)
+        repo.saveBadge(id, now)
+        repo.removeSeen(id)
+        _badgePhotos.value = _badgePhotos.value + (id to path)
+        _badges.value = _badges.value + (id to now)
+        _seenBadges.value = _seenBadges.value - id
+    }
+
+    /** Scolla un bollino messo per errore: resta segnato il passaggio, così si può riattaccare. */
+    fun unstickBadge(id: String) {
+        val at = _badges.value[id] ?: return
+        repo.removeBadge(id)
+        repo.saveSeen(id, at)
+        _badges.value = _badges.value - id
+        _badgePhotos.value = _badgePhotos.value - id
+        _seenBadges.value = _seenBadges.value + (id to at)
+    }
 
     /** Siti per cui l'utente ha scelto "più tardi": non si ripropongono fino al riavvio. */
     val postponedBadges = mutableSetOf<String>()
 
-    fun collectBadge(id: String) {
-        if (id in _badges.value) return
-        val now = System.currentTimeMillis()
-        repo.saveBadge(id, now)
-        _badges.value = _badges.value + (id to now)
-    }
 
     /** Orientamento del globo conservato tra una visita e l'altra della Home. */
     val globeCamera = floatArrayOf(12.5f, 30f, 0f) // yaw(lon), pitch(lat), distanza (0 = default)
