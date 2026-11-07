@@ -53,4 +53,4 @@ Lo script crea la release `vX.Y.Z` con l'APK allegato. Le app installate la vedo
 
 ## Crediti
 
-Immagini della Terra: [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0) · Mappe © Esri, OpenStreetMap contributors.
+Immagini della Terra: [Solar System Scope](https://www.solarsystemscope.com/textures/) (CC BY 4.0) · Mappe © OpenFreeMap, OpenStreetMap contributors (MapLibre).

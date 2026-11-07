@@ -4,11 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,9 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,18 +33,23 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.myexperience.app.ui.theme.LocalDarkTheme
-import org.osmdroid.events.MapEventsReceiver
-import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
-import org.osmdroid.util.MapTileIndex
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.MapEventsOverlay
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import kotlin.math.max
-import kotlin.math.min
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 
 data class MapPin(
     val id: Long,
@@ -54,57 +59,9 @@ data class MapPin(
     val color: Int = 0xFFC8693F.toInt(),
 )
 
-/** Tile Esri World Street Map, colori simili a Google Maps e nessuna API key (CARTO ora la richiede). */
-private val EsriStreets = object : OnlineTileSourceBase(
-    "EsriStreets", 1, 19, 256, "",
-    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/"),
-    "Tiles © Esri",
-) {
-    // Esri vuole z/y/x, osmdroid di default costruisce z/x/y
-    override fun getTileURLString(index: Long) =
-        baseUrl + MapTileIndex.getZoom(index) + "/" + MapTileIndex.getY(index) + "/" + MapTileIndex.getX(index)
-}
-
-/** Esri Canvas scura (senza API key): fondo e nomi su due livelli, fino allo zoom 16 (oltre si ingrandisce). */
-private fun esriCanvas(layer: String) = object : OnlineTileSourceBase(
-    "EsriDark$layer", 1, 16, 256, "",
-    arrayOf("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_$layer/MapServer/tile/"),
-    "Tiles © Esri",
-) {
-    override fun getTileURLString(index: Long) =
-        baseUrl + MapTileIndex.getZoom(index) + "/" + MapTileIndex.getY(index) + "/" + MapTileIndex.getX(index)
-}
-
-/** Tinta blu notte sul fondo grigio di Esri, come il tema scuro di Google Maps. */
-private fun nightTint() = android.graphics.ColorMatrixColorFilter(
-    floatArrayOf(
-        0.72f, 0f, 0f, 0f, -4f,
-        0f, 0.84f, 0f, 0f, 4f,
-        0f, 0f, 1.08f, 0f, 16f,
-        0f, 0f, 0f, 1f, 0f,
-    )
-)
-
-/** Mappa in stile Google Maps senza API key: Esri stradale di giorno, Esri scura con i nomi in tema scuro. */
-private fun MapView.useGoogleLikeTiles(dark: Boolean) {
-    if (!dark) {
-        setTileSource(EsriStreets)
-        return
-    }
-    setTileSource(esriCanvas("Base"))
-    overlayManager.tilesOverlay.setColorFilter(nightTint())
-    val labels = org.osmdroid.views.overlay.TilesOverlay(
-        org.osmdroid.tileprovider.MapTileProviderBasic(context, esriCanvas("Reference")), context,
-    ).apply {
-        loadingBackgroundColor = android.graphics.Color.TRANSPARENT
-        loadingLineColor = android.graphics.Color.TRANSPARENT
-    }
-    overlays.add(0, labels) // sotto i pin
-}
-
-
 /**
- * Mappa OpenStreetMap (nessuna API key necessaria).
+ * Mappa vettoriale in stile Google Maps (MapLibre + tile OpenFreeMap, nessuna API key).
+ * Gli stili chiaro e scuro sono in assets/map_light.json e map_dark.json.
  * @param autoFit se true inquadra automaticamente tutti i pin.
  * @param focus se valorizzato, centra la mappa su quel punto.
  */
@@ -127,28 +84,60 @@ fun OsmMap(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val pinClick by rememberUpdatedState(onPinClick)
     val mapTap by rememberUpdatedState(onMapTap)
+    var ready by remember { mutableStateOf<Pair<MapLibreMap, Style>?>(null) }
+    val fitted = remember { arrayOfNulls<String>(1) }
 
     val mapView = remember {
         MapView(context).apply {
-            useGoogleLikeTiles(dark)
-            setMultiTouchControls(true)
-            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-            isTilesScaledToDpi = true
-            minZoomLevel = 2.0
-            maxZoomLevel = 19.0
-            isHorizontalMapRepetitionEnabled = true
-            isVerticalMapRepetitionEnabled = false
-            setScrollableAreaLimitLatitude(
-                MapView.getTileSystem().maxLatitude,
-                MapView.getTileSystem().minLatitude,
-                0,
-            )
-            setBackgroundColor(if (dark) 0xFF0D1416.toInt() else 0xFFEAE3D3.toInt())
+            onCreate(null)
             if (interactive) {
                 // evita che lo scroll del contenitore "rubi" i gesti della mappa
                 setOnTouchListener { v, _ ->
                     v.parent?.requestDisallowInterceptTouchEvent(true)
                     false
+                }
+            }
+            getMapAsync { map ->
+                map.uiSettings.apply {
+                    isLogoEnabled = false
+                    isAttributionEnabled = false
+                    isCompassEnabled = false
+                    isRotateGesturesEnabled = false
+                    isTiltGesturesEnabled = false
+                    setAllGesturesEnabled(interactive)
+                }
+                map.setMinZoomPreference(1.0)
+                map.addOnMapClickListener { at ->
+                    val hit = map.queryRenderedFeatures(map.projection.toScreenLocation(at), PINS_LAYER).firstOrNull()
+                    val id = hit?.getNumberProperty("id")?.toLong()
+                    val tap = mapTap
+                    when {
+                        id != null -> pinClick(id)
+                        tap != null -> tap(at.latitude, at.longitude)
+                        else -> return@addOnMapClickListener false
+                    }
+                    true
+                }
+                map.setStyle(Style.Builder().fromUri("asset://map_${if (dark) "dark" else "light"}.json")) { style ->
+                    style.addSource(GeoJsonSource(ROUTE_SOURCE))
+                    style.addSource(GeoJsonSource(PINS_SOURCE))
+                    style.addLayer(
+                        LineLayer(ROUTE_LAYER, ROUTE_SOURCE).withProperties(
+                            PropertyFactory.lineColor(0xFF1F6E80.toInt()),
+                            PropertyFactory.lineWidth(3.5f),
+                            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                            PropertyFactory.lineDasharray(arrayOf(2f, 1.6f)),
+                        )
+                    )
+                    style.addLayer(
+                        SymbolLayer(PINS_LAYER, PINS_SOURCE).withProperties(
+                            PropertyFactory.iconImage(Expression.get("icon")),
+                            PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                            PropertyFactory.iconAllowOverlap(true),
+                            PropertyFactory.iconIgnorePlacement(true),
+                        )
+                    )
+                    ready = map to style
                 }
             }
         }
@@ -157,70 +146,49 @@ fun OsmMap(
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
+                Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_STOP -> mapView.onStop()
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
-        mapView.onResume()
+        mapView.onStart()
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycle.removeObserver(observer)
             mapView.onPause()
-            mapView.onDetach()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
 
-    Box(modifier) {
-        AndroidView(
-            factory = { mapView },
-            modifier = Modifier.matchParentSize(),
-            update = { map ->
-                map.overlays.clear()
-                if (mapTap != null) {
-                    map.overlays.add(MapEventsOverlay(object : MapEventsReceiver {
-                        override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
-                            mapTap?.invoke(p.latitude, p.longitude)
-                            return true
-                        }
+    // pin, percorso e inquadratura seguono i dati (dopo che lo stile è pronto)
+    ready?.let { (map, style) -> SideEffect {
+        val features = pins.mapIndexed { i, pin ->
+            val label = if (drawRoute) (i + 1).toString() else null
+            val key = "pin_${pin.color}_${label.orEmpty()}"
+            if (style.getImage(key) == null) style.addImage(key, markerIcon(context, pin.color, label))
+            Feature.fromGeometry(Point.fromLngLat(pin.lon, pin.lat)).apply {
+                addNumberProperty("id", pin.id)
+                addStringProperty("icon", key)
+            }
+        }
+        style.getSourceAs<GeoJsonSource>(PINS_SOURCE)?.setGeoJson(FeatureCollection.fromFeatures(features))
+        val route = if (drawRoute && pins.size > 1) {
+            listOf(Feature.fromGeometry(LineString.fromLngLats(pins.map { Point.fromLngLat(it.lon, it.lat) })))
+        } else emptyList()
+        style.getSourceAs<GeoJsonSource>(ROUTE_SOURCE)?.setGeoJson(FeatureCollection.fromFeatures(route))
+        val key = if (autoFit) pins.joinToString { "${it.lat},${it.lon}" } + "|" + focus else "f|$focus"
+        if (fitted[0] != key) {
+            fitted[0] = key
+            fit(mapView, map, if (autoFit) pins else emptyList(), focus)
+        }
+    } }
 
-                        override fun longPressHelper(p: GeoPoint): Boolean = false
-                    }))
-                }
-                if (drawRoute && pins.size > 1) {
-                    val line = Polyline(map)
-                    line.setPoints(pins.map { GeoPoint(it.lat, it.lon) })
-                    line.outlinePaint.apply {
-                        color = 0xFF1F6E80.toInt()
-                        strokeWidth = 9f
-                        strokeCap = Paint.Cap.ROUND
-                        pathEffect = DashPathEffect(floatArrayOf(28f, 18f), 0f)
-                        isAntiAlias = true
-                    }
-                    line.infoWindow = null
-                    map.overlays.add(line)
-                }
-                pins.forEachIndexed { i, pin ->
-                    val m = Marker(map)
-                    m.position = GeoPoint(pin.lat, pin.lon)
-                    m.icon = markerIcon(context, pin.color, if (drawRoute) (i + 1).toString() else null)
-                    m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    m.title = pin.title
-                    m.infoWindow = null
-                    m.setOnMarkerClickListener { _, _ ->
-                        pinClick(pin.id)
-                        true
-                    }
-                    map.overlays.add(m)
-                }
-                val key = if (autoFit) pins.joinToString { "${it.lat},${it.lon}" } + "|" + focus else "f|$focus"
-                if (map.tag != key) {
-                    map.tag = key
-                    fit(map, if (autoFit) pins else emptyList(), focus)
-                }
-                map.invalidate()
-            },
-        )
+    Box(modifier) {
+        AndroidView(factory = { mapView }, modifier = Modifier.matchParentSize())
         if (!interactive) {
             // Strato trasparente: assorbe tocchi (apre la mappa) e lascia scorrere la pagina
             Box(
@@ -233,7 +201,7 @@ fun OsmMap(
             )
         }
         Text(
-            "© Esri · © OpenStreetMap contributors",
+            "© OpenFreeMap · © OpenStreetMap contributors",
             fontSize = 9.sp,
             color = Color.Black.copy(alpha = 0.7f),
             modifier = Modifier
@@ -246,43 +214,33 @@ fun OsmMap(
     }
 }
 
-private fun fit(map: MapView, pins: List<MapPin>, focus: Pair<Double, Double>?) {
+private const val PINS_SOURCE = "pins"
+private const val PINS_LAYER = "pins-layer"
+private const val ROUTE_SOURCE = "route"
+private const val ROUTE_LAYER = "route-layer"
+
+/** Zoom MapLibre (tile da 512 px): uno in meno rispetto alla vecchia mappa a tile da 256 px. */
+private fun fit(view: MapView, map: MapLibreMap, pins: List<MapPin>, focus: Pair<Double, Double>?) {
     val action = {
         val distinct = pins.map { it.lat to it.lon }.distinct()
         when {
-            focus != null -> {
-                map.controller.setZoom(11.0)
-                map.controller.setCenter(GeoPoint(focus.first, focus.second))
-            }
-            distinct.size == 1 -> {
-                map.controller.setZoom(9.0)
-                map.controller.setCenter(GeoPoint(distinct[0].first, distinct[0].second))
-            }
+            focus != null -> map.moveCamera(CameraUpdateFactory.newCameraPosition(at(focus.first, focus.second, 10.0)))
+            distinct.size == 1 -> map.moveCamera(CameraUpdateFactory.newCameraPosition(at(distinct[0].first, distinct[0].second, 8.0)))
             distinct.size > 1 -> {
-                val lats = distinct.map { it.first }
-                val lons = distinct.map { it.second }
-                val padLat = max((lats.max() - lats.min()) * 0.25, 0.4)
-                val padLon = max((lons.max() - lons.min()) * 0.25, 0.4)
-                val box = BoundingBox(
-                    min(84.0, lats.max() + padLat),
-                    min(179.0, lons.max() + padLon),
-                    max(-84.0, lats.min() - padLat),
-                    max(-179.0, lons.min() - padLon),
-                )
-                map.zoomToBoundingBox(box, false, 60)
-                if (map.zoomLevelDouble > 12.0) map.controller.setZoom(12.0)
+                val bounds = LatLngBounds.Builder().apply { distinct.forEach { include(LatLng(it.first, it.second)) } }.build()
+                val pad = (60 * view.resources.displayMetrics.density).toInt()
+                map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, pad))
+                if (map.cameraPosition.zoom > 11.0) map.moveCamera(CameraUpdateFactory.zoomTo(11.0))
             }
-            else -> {
-                map.controller.setZoom(3.0)
-                map.controller.setCenter(GeoPoint(42.0, 12.5))
-            }
+            else -> map.moveCamera(CameraUpdateFactory.newCameraPosition(at(42.0, 12.5, 2.0)))
         }
     }
-    if (map.width > 0 && map.height > 0) action()
-    else map.addOnFirstLayoutListener { _, _, _, _, _ -> action() }
+    if (view.width > 0 && view.height > 0) action() else view.post { action() }
 }
 
-private fun markerIcon(context: Context, color: Int, label: String?): Drawable {
+private fun at(lat: Double, lon: Double, zoom: Double) = CameraPosition.Builder().target(LatLng(lat, lon)).zoom(zoom).build()
+
+private fun markerIcon(context: Context, color: Int, label: String?): Bitmap {
     val d = context.resources.displayMetrics.density
     val w = (36 * d).toInt()
     val h = (46 * d).toInt()
@@ -321,5 +279,5 @@ private fun markerIcon(context: Context, color: Int, label: String?): Drawable {
     } else {
         c.drawCircle(cx, cy, r * 0.38f, p)
     }
-    return BitmapDrawable(context.resources, bmp)
+    return bmp
 }

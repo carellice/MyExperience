@@ -15,8 +15,10 @@ android {
         applicationId = "com.myexperience.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.7.0"
+        versionCode = 10
+        versionName = "1.7.1"
+        // MapLibre è nativo: solo telefoni a 64 bit (arm64) ed emulatore (x86_64), per non gonfiare l'APK
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     // Chiave di firma fuori dal repo: ~/.android/myexperience-signing/signing.properties.
@@ -58,6 +60,7 @@ android {
         abortOnError = false
     }
     packaging {
+        jniLibs { useLegacyPackaging = true } // librerie native compresse nell'APK
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -87,7 +90,7 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")
 
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    implementation("org.maplibre.gl:android-sdk:12.3.1")
 
     implementation("androidx.media3:media3-exoplayer:1.5.0")
     implementation("androidx.media3:media3-ui:1.5.0")
