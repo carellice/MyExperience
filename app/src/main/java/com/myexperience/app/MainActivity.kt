@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -316,8 +317,11 @@ private fun BottomBar(current: String?, onSelect: (String) -> Unit, onAdd: () ->
             .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Larga quanto lo schermo (fino a 520 dp): ogni scheda ha il suo spazio, con icona ed etichetta.
         Row(
             Modifier
+                .widthIn(max = 520.dp)
+                .fillMaxWidth()
                 .shadow(24.dp, RoundedCornerShape(32.dp), ambientColor = Sea, spotColor = Sea)
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -325,33 +329,31 @@ private fun BottomBar(current: String?, onSelect: (String) -> Unit, onAdd: () ->
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            TabItem(tabs[0], current == tabs[0].route) { onSelect(tabs[0].route) }
-            TabItem(tabs[1], current == tabs[1].route) { onSelect(tabs[1].route) }
+            TabItem(tabs[0], current == tabs[0].route, Modifier.weight(1f)) { onSelect(tabs[0].route) }
+            TabItem(tabs[1], current == tabs[1].route, Modifier.weight(1f)) { onSelect(tabs[1].route) }
             AddButton(onAdd)
-            TabItem(tabs[2], current == tabs[2].route) { onSelect(tabs[2].route) }
+            TabItem(tabs[2], current == tabs[2].route, Modifier.weight(1f)) { onSelect(tabs[2].route) }
         }
     }
 }
 
 @Composable
-private fun TabItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+private fun TabItem(tab: Tab, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val bgAlpha by animateFloatAsState(if (selected) 1f else 0f, tween(300), label = "bg")
-    val tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-    Row(
-        Modifier
+    val tint by animateColorAsState(if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, tween(300), label = "tint")
+    Column(
+        modifier
             .clip(RoundedCornerShape(24.dp))
-            .graphicsLayer { }
             .background(Brush.linearGradient(listOf(Sea.copy(alpha = bgAlpha), Forest.copy(alpha = bgAlpha))))
             .bounceClick(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-            .animateContentSize(spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(tab.icon, tab.label, tint = tint)
-        if (selected) {
-            Spacer(Modifier.width(6.dp))
-            Text(tab.label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
+        Text(
+            tab.label, color = tint, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.sp,
+            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 
