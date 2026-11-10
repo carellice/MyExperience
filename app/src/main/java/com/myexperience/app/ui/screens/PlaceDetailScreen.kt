@@ -46,6 +46,10 @@ import com.myexperience.app.MainViewModel
 import com.myexperience.app.data.AlbumMedia
 import com.myexperience.app.data.JournalBlock
 import com.myexperience.app.ui.components.*
+import com.myexperience.app.data.AllBadgeSites
+import com.myexperience.app.data.UnescoSite
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import com.myexperience.app.ui.journal.*
 import com.myexperience.app.ui.theme.BrandBrush
 import com.myexperience.app.ui.theme.Sea
@@ -77,6 +81,13 @@ fun PlaceDetailScreen(
     var paletteAt by remember { mutableStateOf<Int?>(null) }
     var editing by remember { mutableStateOf<EditRequest?>(null) }
     var mediaOptions by remember { mutableStateOf<AlbumMedia?>(null) }
+    // I bollini delle collezioni nei luoghi di questo album: si timbrano da qui con le foto del rullino.
+    val albumBadges by vm.albumBadges.collectAsStateWithLifecycle()
+    val badges by vm.badges.collectAsStateWithLifecycle()
+    val badgePhotos by vm.badgePhotos.collectAsStateWithLifecycle()
+    val seenBadges by vm.seenBadges.collectAsStateWithLifecycle()
+    val stamps = remember(albumBadges, placeId) { AllBadgeSites.filter { albumBadges[it.id] == placeId } }
+    var badgeDetail by remember { mutableStateOf<UnescoSite?>(null) }
 
     // import: per il rullino o per un blocco in modifica
     var pendingImport by remember { mutableStateOf<((List<Long>) -> Unit)?>(null) }
@@ -198,6 +209,33 @@ fun PlaceDetailScreen(
                                         .background(theme.accent.copy(alpha = 0.12f))
                                         .padding(horizontal = 10.dp, vertical = 5.dp),
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---------- BOLLINI ----------
+            if (stamps.isNotEmpty()) {
+                item(key = "badges") {
+                    Column(Modifier.fillMaxWidth().background(theme.page).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            if (stamps.size == 1) "Un bollino in questo viaggio" else "${stamps.size} bollini in questo viaggio",
+                            color = theme.soft, fontFamily = theme.font, fontSize = 13.sp,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            stamps.forEach { site ->
+                                Column(
+                                    Modifier.width(92.dp).clip(RoundedCornerShape(16.dp)).bounceClick { badgeDetail = site }.padding(4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    UnescoBadge(site, collected = site.id in badges, size = 76.dp, visited = true)
+                                    Text(
+                                        site.name, color = theme.ink, fontSize = 11.sp, maxLines = 2, textAlign = TextAlign.Center,
+                                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -494,6 +532,21 @@ fun PlaceDetailScreen(
             vm.setTheme(p.id, id)
             showThemes = false
         }
+    }
+
+    badgeDetail?.let { site ->
+        BadgeDetailDialog(
+            site = site,
+            collectedAt = badges[site.id],
+            photo = badgePhotos[site.id],
+            seenAt = seenBadges[site.id],
+            albumTitle = data?.place?.title,
+            albumPhotos = data?.media?.filter { !it.isVideo }?.map { it.path }.orEmpty(),
+            onPaste = { uri, at -> vm.collectBadge(site.id, uri, at) },
+            onUnstick = { vm.unstickBadge(site.id) },
+            onForget = { vm.forgetVisit(site.id) },
+            onDismiss = { badgeDetail = null },
+        )
     }
 
     if (confirmDelete) {
