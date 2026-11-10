@@ -177,8 +177,9 @@ fun UnescoScreen(vm: MainViewModel, collectionId: String, onBack: () -> Unit) {
             seenAt = seen[site.id],
             albumTitle = album?.place?.title,
             albumPhotos = album?.media?.filter { !it.isVideo }?.map { it.path }.orEmpty(),
-            onPaste = { uri -> vm.collectBadge(site.id, uri) },
+            onPaste = { uri, at -> vm.collectBadge(site.id, uri, at) },
             onUnstick = { vm.unstickBadge(site.id) },
+            onForget = { vm.forgetVisit(site.id) },
             onDismiss = { detail = null },
         )
     }
@@ -189,28 +190,40 @@ fun UnescoScreen(vm: MainViewModel, collectionId: String, onBack: () -> Unit) {
  * Visitato (posizione, album o bollino scollato): si incolla la foto, anche da quelle dell'album.
  * Mai visto: si può raccogliere lo stesso se ci sei stato in passato, incollando una tua foto.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BadgeDetailDialog(
+internal fun BadgeDetailDialog(
     site: UnescoSite,
     collectedAt: Long?,
     photo: String?,
     seenAt: Long?,
     albumTitle: String?,
     albumPhotos: List<String>,
-    onPaste: (Uri) -> Unit,
+    onPaste: (Uri, Long?) -> Unit,
     onUnstick: () -> Unit,
+    onForget: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var confirmUnstick by remember { mutableStateOf(false) }
-    val pick = rememberBadgePhotoPicker { onPaste(it); onDismiss() }
+    var confirmForget by remember { mutableStateOf(false) }
+    // Visita passata segnata a mano: prima il giorno, poi la foto.
+    var askDate by remember { mutableStateOf(false) }
+    var pastDate by remember { mutableStateOf<Long?>(null) }
+    val pick = rememberBadgePhotoPicker { onPaste(it, pastDate); onDismiss() }
     val collected = collectedAt != null && photo != null
     val visited = !collected && (seenAt != null || albumTitle != null)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Chiudi") } },
-        dismissButton = if (collected) {
-            { TextButton(onClick = { confirmUnstick = true }) { Text("Scolla il bollino", color = MaterialTheme.colorScheme.error) } }
-        } else null,
+        dismissButton = when {
+            collected -> {
+                { TextButton(onClick = { confirmUnstick = true }) { Text("Scolla il bollino", color = MaterialTheme.colorScheme.error) } }
+            }
+            seenAt != null -> {
+                { TextButton(onClick = { confirmForget = true }) { Text("Annulla il passaggio", color = MaterialTheme.colorScheme.error) } }
+            }
+            else -> null
+        },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -249,7 +262,7 @@ private fun BadgeDetailDialog(
                                 AsyncImage(
                                     model = File(path), contentDescription = null, contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(72.dp).clip(RoundedCornerShape(14.dp))
-                                        .bounceClick { onPaste(Uri.fromFile(File(path))); onDismiss() },
+                                        .bounceClick { onPaste(Uri.fromFile(File(path)), null); onDismiss() },
                                 )
                             }
                         }
@@ -257,11 +270,11 @@ private fun BadgeDetailDialog(
                     Spacer(Modifier.height(14.dp))
                     Box(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(BrandBrush)
-                            .bounceClick(onClick = pick).padding(vertical = 12.dp),
+                            .bounceClick(onClick = { if (visited) pick() else askDate = true }).padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            if (visited) "Incolla una foto dalla galleria" else "Ci sono stato in passato: incolla una foto",
+                            if (visited) "Incolla una foto dalla galleria" else "Ci sono stato in passato: scegli il giorno e incolla una foto",
                             color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                         )
                     }
@@ -275,15 +288,62 @@ private fun BadgeDetailDialog(
             onDismissRequest = { confirmUnstick = false },
             title = { Text("Scollare il bollino?") },
             text = {
-                Text("La foto viene tolta dalla collezione. Il passaggio resta segnato: potrai riattaccare il bollino con un'altra foto quando vuoi.")
-            },
-            confirmButton = {
-                TextButton(onClick = { onUnstick(); confirmUnstick = false; onDismiss() }) {
-                    Text("Scolla", color = MaterialTheme.colorScheme.error)
+                Column {
+                    Text("La foto viene tolta dalla collezione. Il passaggio resta segnato: potrai riattaccare il bollino con un'altra foto quando vuoi.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("Se il passaggio era sbagliato, annullalo: il bollino torna da scoprire.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            dismissButton = { TextButton(onClick = { confirmUnstick = false }) { Text("Annulla") } },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { onUnstick(); confirmUnstick = false; onDismiss() }) {
+                        Text("Scolla", color = MaterialTheme.colorScheme.error)
+                    }
+                    TextButton(onClick = { onForget(); confirmUnstick = false; onDismiss() }) {
+                        Text("Scolla e annulla il passaggio", color = MaterialTheme.colorScheme.error)
+                    }
+                    TextButton(onClick = { confirmUnstick = false }) { Text("Annulla") }
+                }
+            },
         )
+    }
+
+    if (confirmForget) {
+        AlertDialog(
+            onDismissRequest = { confirmForget = false },
+            title = { Text("Annullare il passaggio?") },
+            text = { Text("Il passaggio del ${formatDay(seenAt ?: 0)} viene tolto: il bollino torna da scoprire.") },
+            confirmButton = {
+                TextButton(onClick = { onForget(); confirmForget = false; onDismiss() }) {
+                    Text("Annulla il passaggio", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmForget = false }) { Text("Indietro") } },
+        )
+    }
+
+    if (askDate) {
+        val today = System.currentTimeMillis()
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = today,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= today
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { askDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    // A mezzogiorno del giorno scelto: il fuso orario non lo sposta al giorno prima.
+                    pastDate = state.selectedDateMillis?.plus(12 * 60 * 60 * 1000L)
+                    askDate = false
+                    pick()
+                }) { Text("Scegli la foto") }
+            },
+            dismissButton = { TextButton(onClick = { askDate = false }) { Text("Annulla") } },
+        ) {
+            DatePicker(state, title = { Text("Quando ci sei stato?", Modifier.padding(start = 24.dp, top = 16.dp)) })
+        }
     }
 }
 

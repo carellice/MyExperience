@@ -123,11 +123,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _seenBadges.value = _seenBadges.value + (id to now)
     }
 
-    /** Raccoglie il bollino incollando la foto scelta (copiata nella memoria dell'app). */
-    fun collectBadge(id: String, photo: Uri) = viewModelScope.launch {
+    /**
+     * Raccoglie il bollino incollando la foto scelta (copiata nella memoria dell'app). [at] è il giorno
+     * del passaggio scelto a mano per una visita passata; senza, è adesso.
+     */
+    fun collectBadge(id: String, photo: Uri, at: Long? = null) = viewModelScope.launch {
         val path = repo.importFile(photo) ?: return@launch
         _badgePhotos.value[id]?.let { java.io.File(it).delete() }
-        val now = System.currentTimeMillis()
+        val now = at ?: System.currentTimeMillis()
         repo.saveBadgePhoto(id, path)
         repo.saveBadge(id, now)
         repo.removeSeen(id)
@@ -144,6 +147,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _badges.value = _badges.value - id
         _badgePhotos.value = _badgePhotos.value - id
         _seenBadges.value = _seenBadges.value + (id to at)
+    }
+
+    /** Annulla un passaggio segnato per errore, togliendo anche il bollino se c'è: il sito torna da scoprire. */
+    fun forgetVisit(id: String) {
+        if (id in _badges.value) repo.removeBadge(id)
+        repo.removeSeen(id)
+        _badges.value = _badges.value - id
+        _badgePhotos.value = _badgePhotos.value - id
+        _seenBadges.value = _seenBadges.value - id
     }
 
     /** Siti per cui l'utente ha scelto "più tardi": non si ripropongono fino al riavvio. */
