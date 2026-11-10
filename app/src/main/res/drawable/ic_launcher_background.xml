@@ -8,9 +8,9 @@
             <gradient android:type="linear"
                 android:startX="0" android:startY="0"
                 android:endX="108" android:endY="108">
-                <item android:offset="0" android:color="#FFFF7A59" />
-                <item android:offset="0.5" android:color="#FFFF3D7F" />
-                <item android:offset="1" android:color="#FF7B5CFF" />
+                <item android:offset="0" android:color="#FF2A8197" />
+                <item android:offset="0.5" android:color="#FF5B8A4E" />
+                <item android:offset="1" android:color="#FFE6B65C" />
             </gradient>
         </aapt:attr>
     </path>
