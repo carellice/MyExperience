@@ -4,6 +4,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.MilitaryTech
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -72,6 +76,9 @@ fun ProfileScreen(
     val all = places.orEmpty()
     var editing by remember { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf<String?>(null) } // paese, "♥" = preferiti
+    // Come su Instagram: sotto la bio due icone, gli album e le collezioni di bollini.
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var settings by remember { mutableStateOf(false) }
 
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) vm.setAvatar(uri)
@@ -143,15 +150,24 @@ fun ProfileScreen(
                         )
                     }
                     Row(
-                        Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp)
-                            .clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f))
-                            .bounceClick { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Rounded.AddAPhoto, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Copertina", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        Row(
+                            Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.35f))
+                                .bounceClick { coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.AddAPhoto, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Copertina", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.size(34.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.35f)).bounceClick { settings = true },
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Rounded.Settings, "Impostazioni", tint = Color.White, modifier = Modifier.size(19.dp)) }
                     }
                 }
                 Column(Modifier.fillMaxWidth().padding(top = 128.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -196,18 +212,20 @@ fun ProfileScreen(
             }
         }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            SectionTitle("Collezioni", Modifier.padding(top = 4.dp).offset(x = (-20).dp))
+        item(span = { GridItemSpan(maxLineSpan) }, key = "tabs") {
+            ProfileTabs(tab) { tab = it }
         }
-        BadgeCollections.forEach { collection ->
-            item(span = { GridItemSpan(maxLineSpan) }, key = "c${collection.id}") {
-                BadgeCollectionCard(collection, badges) { onOpenCollection(collection.id) }
+
+        if (tab == 1) {
+            BadgeCollections.forEachIndexed { i, collection ->
+                item(span = { GridItemSpan(maxLineSpan) }, key = "c${collection.id}") {
+                    BadgeCollectionCard(collection, badges, Modifier.animateItem().appear(i)) { onOpenCollection(collection.id) }
+                }
             }
         }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
+        if (tab == 0) item(span = { GridItemSpan(maxLineSpan) }) {
             Column {
-                SectionTitle("I miei album", Modifier.padding(top = 4.dp).offset(x = (-20).dp))
                 if (all.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { SelectChip("Tutti · ${all.size}", filter == null) { filter = null } }
@@ -222,7 +240,7 @@ fun ProfileScreen(
             }
         }
 
-        if (all.isEmpty()) {
+        if (tab == 0 && all.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 EmptyState(
                     Icons.Rounded.PhotoAlbum, "Nessun album ancora",
@@ -232,7 +250,7 @@ fun ProfileScreen(
             }
         }
 
-        byYear.forEach { (year, items) ->
+        if (tab == 0) byYear.forEach { (year, items) ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "y$year") {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
                     Text("$year", style = MaterialTheme.typography.titleLarge.copy(brush = BrandBrush), fontWeight = FontWeight.Black)
@@ -249,30 +267,6 @@ fun ProfileScreen(
         }
 
         item(span = { GridItemSpan(maxLineSpan) }) {
-            val ctx = LocalContext.current
-            val scope = rememberCoroutineScope()
-            val update by AppUpdater.state.collectAsStateWithLifecycle()
-            Row(
-                Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .bounceClick { scope.launch { AppUpdater.check(ctx.applicationContext, manual = true) } }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.SystemUpdate, null, tint = Sea)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Controlla aggiornamenti", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Versione ${AppUpdater.currentVersion}", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (update is UpdateState.Checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            }
-        }
-
-        item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 "Immagini della Terra: Solar System Scope (CC BY 4.0) · Mappe © OpenFreeMap, OpenStreetMap contributors",
                 style = MaterialTheme.typography.labelSmall,
@@ -282,6 +276,8 @@ fun ProfileScreen(
             )
         }
     }
+
+    if (settings) ProfileSettingsSheet { settings = false }
 
     if (editing) {
         var name by remember { mutableStateOf(profile.name) }
@@ -303,12 +299,12 @@ fun ProfileScreen(
 
 /** Una collezione di bollini: avanzamento e ultimi raccolti. */
 @Composable
-private fun BadgeCollectionCard(collection: BadgeCollection, badges: Map<String, Long>, onOpen: () -> Unit) {
+private fun BadgeCollectionCard(collection: BadgeCollection, badges: Map<String, Long>, modifier: Modifier = Modifier, onOpen: () -> Unit) {
     val sites = collection.items
     val total = sites.size
     val collected = sites.filter { it.id in badges }.sortedByDescending { badges[it.id] }
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface)
+        modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surface)
             .bounceClick(onClick = onOpen).padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -410,5 +406,69 @@ private fun AlbumCard(p: PlaceWithMedia, modifier: Modifier = Modifier, onClick:
             Spacer(Modifier.width(4.dp))
             Text("${p.media.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+/** Le due icone sotto la bio, come su Instagram: gli album e le collezioni, con la riga che scorre sotto quella scelta. */
+@Composable
+private fun ProfileTabs(selected: Int, onSelect: (Int) -> Unit) {
+    val icons = listOf(Icons.Rounded.GridView to "I miei album", Icons.Rounded.MilitaryTech to "Collezioni")
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        val each = maxWidth / icons.size
+        val offset by animateDpAsState(each * selected, spring(dampingRatio = 0.7f, stiffness = 500f), label = "tab")
+        Row(Modifier.fillMaxWidth()) {
+            icons.forEachIndexed { i, (icon, label) ->
+                val tint by animateColorAsState(
+                    if (i == selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    label = "tint",
+                )
+                Box(
+                    Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(14.dp)).bounceClick { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(icon, label, tint = tint, modifier = Modifier.size(26.dp)) }
+            }
+        }
+        Box(
+            Modifier.align(Alignment.BottomStart).offset(x = offset + each / 4).width(each / 2).height(3.dp)
+                .clip(RoundedCornerShape(50)).background(BrandBrush),
+        )
+    }
+}
+
+/** Le impostazioni dell'app, dall'icona in alto a destra del profilo. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileSettingsSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+            Text("Impostazioni", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
+            UpdatesRow()
+        }
+    }
+}
+
+/** Controlla se su GitHub c'è una versione nuova dell'app. */
+@Composable
+private fun UpdatesRow() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val update by AppUpdater.state.collectAsStateWithLifecycle()
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .bounceClick { scope.launch { AppUpdater.check(ctx.applicationContext, manual = true) } }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.SystemUpdate, null, tint = Sea)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Controlla aggiornamenti", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Versione ${AppUpdater.currentVersion}", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (update is UpdateState.Checking) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
     }
 }
